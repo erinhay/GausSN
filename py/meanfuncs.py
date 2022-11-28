@@ -1,17 +1,29 @@
 import numpy as np
 
 class UniformMean:
-    def __init__(self, c):
-        self.c = c
+    def __init__(self, params):
+        self.c = params[0]
+        self.params = params
+        
+    def reset(self, params):
+        self.c = params[0]
+        self.params = params
         
     def mean(self, y):
         return np.repeat(self.c, len(y))
 
 class Sin:
-    def __init__(self, A, w, phi):
-        self.A = A
-        self.w = w
-        self.phi = phi
+    def __init__(self, params):
+        self.A = params[0]
+        self.w = params[1]
+        self.phi = params[2]
+        self.params = params
+        
+    def reset(self, params):
+        self.A = params[0]
+        self.w = params[1]
+        self.phi = params[2]
+        self.params = params
         
     def mean(self, y):
         return self.A * np.sin((y*self.w) + self.phi)
@@ -20,12 +32,21 @@ class Bazin2009:
     """
     params = [A, B, t0, T_fall, T_rise]
     """
-    def __init__(self, A, beta, t0, T_fall, T_rise):
-        self.A = A
-        self.beta = beta
-        self.t0 = t0
-        self.Tfall = T_fall
-        self.Trise = T_rise
+    def __init__(self, params):
+        self.A = params[0]
+        self.beta = params[1]
+        self.t0 = params[2]
+        self.Tfall = params[3]
+        self.Trise = params[4]
+        self.params = params
+        
+    def reset(self, params):
+        self.A = params[0]
+        self.beta = params[1]
+        self.t0 = params[2]
+        self.Tfall = params[3]
+        self.Trise = params[4]
+        self.params = params
     
     def mean(self, y):
         mu = np.zeros([len(y)])
@@ -39,13 +60,23 @@ class Karpenka2012:
     """
     params = [A, B, t1, t0, T_fall, T_rise]
     """
-    def __init__(self, A, beta, t1, t0, T_fall, T_rise):
-        self.A = A
-        self.beta = beta
-        self.t1 = t1
-        self.t0 = t0
-        self.Tfall = T_fall
-        self.Trise = T_rise
+    def __init__(self, params):
+        self.A = params[0]
+        self.beta = params[1]
+        self.t1 = params[2]
+        self.t0 = params[3]
+        self.Tfall = params[4]
+        self.Trise = params[5]
+        self.params = params
+        
+    def reset(self, params):
+        self.A = params[0]
+        self.beta = params[1]
+        self.t1 = params[2]
+        self.t0 = params[3]
+        self.Tfall = params[4]
+        self.Trise = params[5]
+        self.params = params
     
     def mean(self, y):
         mu = np.zeros([len(y)])
@@ -61,13 +92,23 @@ class Villar2019:
     params = [A, beta, t1, t0, T_fall, T_rise]
     """
     
-    def __init__(self, A, beta, t1, t0, T_fall, T_rise):
-        self.A = A
-        self.beta = beta
-        self.t1 = t1
-        self.t0 = t0
-        self.Tfall = T_fall
-        self.Trise = T_rise
+    def __init__(self, params):
+        self.A = params[0]
+        self.beta = params[1]
+        self.t1 = params[2]
+        self.t0 = params[3]
+        self.Tfall = params[4]
+        self.Trise = params[5]
+        self.params = params
+        
+    def reset(self, params):
+        self.A = params[0]
+        self.beta = params[1]
+        self.t1 = params[2]
+        self.t0 = params[3]
+        self.Tfall = params[4]
+        self.Trise = params[5]
+        self.params = params
         
     def mean(self, y):
         mu = np.zeros([len(y)])
@@ -88,9 +129,10 @@ class ExpFunction:
     """
     params = [A, tau]
     """
-    def __init__(self, A, tau):
-        self.A = A
-        self.tau = tau
+    def __init__(self, params):
+        self.A = params[0]
+        self.tau = params[1]
+        self.params = params
         
     def mean(self, y):
         mu = np.zeros([len(y)])
