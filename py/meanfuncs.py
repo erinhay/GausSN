@@ -58,11 +58,13 @@ class Bazin2009:
 
 class Karpenka2012:
     """
-    params = [A, B, t1, t0, T_fall, T_rise]
+    params = [A, B, t1, t0, T_fall, T_rise, offset]
+    
+    bounds (with squared exp kernel) = [(10, 10000), (10,300), (10,20*np.max(zband["fluxcal"])), (-np.max(zband["fluxcal"])/150,-1), t1_bound, t0_bound, (20, np.max(zband['mjd'])-np.min(zband['mjd'])), (1, 50)]
     """
     def __init__(self, params):
-        self.A = params[0]
-        self.beta = params[1]
+        self.A = np.exp(params[0])
+        self.B = np.exp(params[1])
         self.t1 = params[2]
         self.t0 = params[3]
         self.Tfall = params[4]
@@ -70,8 +72,8 @@ class Karpenka2012:
         self.params = params
         
     def reset(self, params):
-        self.A = params[0]
-        self.beta = params[1]
+        self.A = np.exp(params[0])
+        self.B = np.exp(params[1])
         self.t1 = params[2]
         self.t0 = params[3]
         self.Tfall = params[4]
@@ -81,10 +83,10 @@ class Karpenka2012:
     def mean(self, y):
         mu = np.zeros([len(y)])
 
-        a = 1 + (self.beta*((y - self.t1)**2))
+        a = 1 + (self.B * ((y - self.t1)**2))
         b = np.exp(-(y - self.t0)/self.Tfall)
         c = 1 + np.exp(-(y - self.t0)/self.Trise)
-        mu = self.A * a * (b/c)
+        mu = (self.A * a * (b/c))
         return mu
 
 class Villar2019:
@@ -112,17 +114,18 @@ class Villar2019:
         
     def mean(self, y):
         mu = np.zeros([len(y)])
+        denom = 1 + np.exp(-(y - self.t0)/self.Trise)
+        constant = self.A + (self.beta * (self.t1 - self.t0))
     
         for i in range(len(y)):
-            if y < self.t1:
+            if y[i] < self.t1:
                 a = self.A + (self.beta * (y[i] - self.t0))
-                b = 1 + np.exp(-(y[i] - self.t0)/self.Trise)
-                mu[i] = a/b
+                mu[i] = a
             else:
-                a = self.A + (self.beta * (self.t1 - self.t0))
-                b = 1 + np.exp(-(y[i] - self.t0)/self.Tfall)
-                c = np.exp(-(y[i] - self.t1)/self.Trise)
-                mu[i] = (a*c)/b
+                b = np.exp(-(y[i] - self.t1)/self.Tfall)
+                mu[i] = (constant*b)
+                
+        mu = (mu/denom)
         return mu
 
 class ExpFunction:
@@ -137,4 +140,28 @@ class ExpFunction:
     def mean(self, y):
         mu = np.zeros([len(y)])
         mu = self.A * np.exp(y*self.tau)
+        return mu
+    
+class QuarticFunction:
+    """
+    params = [a, b, c, d, e]
+    """
+    def __init__(self, params):
+        self.a = params[0]
+        self.b = params[1]
+        self.c = params[2]
+        self.d = params[3]
+        self.e = params[4]
+        self.params = params
+        
+    def reset(self, params):
+        self.a = params[0]
+        self.b = params[1]
+        self.c = params[2]
+        self.d = params[3]
+        self.e = params[4]
+        self.params = params
+        
+    def mean(self, y):
+        mu = a*(y**4) + b*(y**3) + c*(y**2) + d*y + e
         return mu
