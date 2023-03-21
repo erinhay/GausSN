@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.optimize import minimize
 import dynesty
-import jax.numpy as jnp
+import emcee
+import matplotlib.pyplot as plt
 
 class GP:
     """
