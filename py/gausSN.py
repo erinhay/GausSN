@@ -65,7 +65,7 @@ class GP:
             self.kernel.reset(kernel_params)
             self.meanfunc.reset(meanfunc_params)
         
-        log_prior = logprior(kernel_params, meanfunc_params)
+        log_prior = logprior(kernel_params+meanfunc_params)
         loglike = self.loglikelihood(x, self.y, self.yerr, log_prior, magnification_matrix)
         if np.isinf(loglike):
             if invert:
