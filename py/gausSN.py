@@ -22,7 +22,7 @@ class GP:
         self.mean = self.meanfunc.mean(x)
         
         try:
-            a = np.log(np.linalg.det(2 * np.pi * self.cov))
+            sign, a = np.linalg.slogdet(2 * np.pi * self.cov)
             b = np.dot(np.transpose(self.mean - y), np.linalg.solve(self.cov, (self.mean - y)))
         except np.linalg.LinAlgError:
             return -np.inf
@@ -45,41 +45,32 @@ class GP:
             magnification_matrix = 1
             
         if logprior == None:
-            logprior = self.logprior
+            logprior = self.logprior      
         
-        loglike = 0
-        for n in range(self.n_bands):
-            
-            if fix_mean_params and fix_kernel_params:
-                kernel_params = self.kernel.params
-                meanfunc_params = self.meanfunc.params
-            elif fix_mean_params:
-                offset = n * len(self.kernel.params)
-                
-                kernel_params = [params[i+offset] for i in range(len(self.kernel.params))]
-                meanfunc_params = self.meanfunc.params
-                self.kernel.reset(kernel_params)
-            elif fix_kernel_params:
-                offset = n * len(self.meanfunc.params)
-                
-                kernel_params = self.kernel.params
-                meanfunc_params = [params[i+len(self.kernel.params)+offset] for i in range(len(self.meanfunc.params))]
-                self.meanfunc.reset(meanfunc_params)
-            else:
-                offset = n * (len(self.kernel.params) + len(self.meanfunc.params))
-                
-                kernel_params = [params[i+offset] for i in range(len(self.kernel.params))]
-                meanfunc_params = [params[i+len(self.kernel.params)+offset] for i in range(len(self.meanfunc.params))]
+        if fix_mean_params and fix_kernel_params:
+            kernel_params = self.kernel.params
+            meanfunc_params = self.meanfunc.params
+        elif fix_mean_params:
+            kernel_params = [params[i] for i in range(len(self.kernel.params))]
+            meanfunc_params = self.meanfunc.params
+            self.kernel.reset(kernel_params)
+        elif fix_kernel_params:
+            kernel_params = self.kernel.params
+            meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
+            self.meanfunc.reset(meanfunc_params)
+        else:
+            kernel_params = [params[i] for i in range(len(self.kernel.params))]
+            meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
 
-                self.kernel.reset(kernel_params)
-                self.meanfunc.reset(meanfunc_params)
-            
-            log_prior = logprior(kernel_params, meanfunc_params)
-            loglike += self.loglikelihood(x, self.y, self.yerr, log_prior, magnification_matrix)
-            if np.isinf(loglike):
-                if invert:
-                    return np.inf
-                return -np.inf
+            self.kernel.reset(kernel_params)
+            self.meanfunc.reset(meanfunc_params)
+        
+        log_prior = logprior(kernel_params, meanfunc_params)
+        loglike = self.loglikelihood(x, self.y, self.yerr, log_prior, magnification_matrix)
+        if np.isinf(loglike):
+            if invert:
+                return np.inf
+            return -np.inf
             
         if invert:
             return -loglike
@@ -91,11 +82,11 @@ class GP:
         if fix_mean_params and fix_kernel_params:
             self.ndim = 0
         elif fix_mean_params:
-            self.ndim = len(self.kernel.params) * n_bands
+            self.ndim = len(self.kernel.params)
         elif fix_kernel_params:
-            self.ndim = len(self.meanfunc.params) * n_bands
+            self.ndim = len(self.meanfunc.params)
         else:
-            self.ndim = (len(self.kernel.params) + len(self.meanfunc.params)) * n_bands
+            self.ndim = (len(self.kernel.params) + len(self.meanfunc.params))
         
         if lensing_model != None:
             self.ndim += len(lensing_model.lensing_params)
@@ -113,11 +104,11 @@ class GP:
             if fix_mean_params and fix_kernel_params:
                 init_guess = []
             elif fix_mean_params:
-                init_guess = [self.kernel.params[i] for i in range(len(self.kernel.params))] * self.n_bands
+                init_guess = [self.kernel.params[i] for i in range(len(self.kernel.params))]
             elif fix_kernel_params:
-                init_guess = [self.meanfunc.params[i] for i in range(len(self.meanfunc.params))] * self.n_bands
+                init_guess = [self.meanfunc.params[i] for i in range(len(self.meanfunc.params))]
             else:
-                init_guess = ([self.kernel.params[i] for i in range(len(self.kernel.params))] + [self.meanfunc.params[i] for i in range(len(self.meanfunc.params))]) * self.n_bands
+                init_guess = ([self.kernel.params[i] for i in range(len(self.kernel.params))] + [self.meanfunc.params[i] for i in range(len(self.meanfunc.params))])
             
             if lensing_model != None:
                 init_guess = init_guess + lensing_model.lensing_params
@@ -138,11 +129,11 @@ class GP:
             if fix_mean_params and fix_kernel_params:
                 init_guess = []
             elif fix_mean_params:
-                init_guess = [self.kernel.params[i] for i in range(len(self.kernel.params))] * self.n_bands
+                init_guess = [self.kernel.params[i] for i in range(len(self.kernel.params))]
             elif fix_kernel_params:
-                init_guess = [self.meanfunc.params[i] for i in range(len(self.meanfunc.params))] * self.n_bands
+                init_guess = [self.meanfunc.params[i] for i in range(len(self.meanfunc.params))]
             else:
-                init_guess = ([self.kernel.params[i] for i in range(len(self.kernel.params))] + [self.meanfunc.params[i] for i in range(len(self.meanfunc.params))]) * self.n_bands
+                init_guess = ([self.kernel.params[i] for i in range(len(self.kernel.params))] + [self.meanfunc.params[i] for i in range(len(self.meanfunc.params))])
             
             if lensing_model != None:
                 init_guess = init_guess + lensing_model.lensing_params
