@@ -1,0 +1,14 @@
+#Ia from Rodney et. al. 2011
+#'bessellr' magnitude (unclear of mag system, can't find reference)
+#uses 171 Ias
+#Ib/c and II from Grayling et. al. 2023 
+#'desr' AB absolute magnitudes
+#50 Ib/c (11 spec & 39 phot) and 69 IIs (31 spec & 38 phot)
+type mean sigma
+Ia -19.37 .47
+Ib -17.05 0.72 
+Ic -17.05 0.72
+IIb -17.10 0.7
+IIL -17.10 0.7
+IIP -17.10 0.7
+IIn -17.10 0.7

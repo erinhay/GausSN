@@ -4,7 +4,6 @@ xtick.bottom: True
 xtick.color: black
 xtick.direction: in
 xtick.labelbottom: True
-xtick.labelcolor: inherit
 xtick.labelsize: large
 xtick.labeltop: False
 xtick.major.bottom: True
@@ -19,11 +18,9 @@ xtick.minor.top : True
 xtick.minor.visible : True
 xtick.minor.width : 0.6
 xtick.top : True
-yaxis.labellocation : center
 ytick.alignment : center_baseline
 ytick.color : black
 ytick.direction : in
-ytick.labelcolor : inherit
 ytick.labelleft : True
 ytick.labelright : False
 ytick.labelsize : large
