@@ -1,10 +1,22 @@
 import numpy as np
 import jax.numpy as jnp
-from scipy.optimize import minimize
-import dynesty
-import emcee
-import zeus
 import matplotlib.pyplot as plt
+try:
+    from scipy.optimize import minimize
+except:
+    pass
+try:
+    import dynesty
+except:
+    pass
+try:
+    import emcee
+except:
+    pass
+try:
+    import zeus
+except:
+    pass
 
 class GP:
     """
@@ -147,8 +159,7 @@ class GP:
         else:
             for pb in range(self.n_bands):
                 if lensing_model != None:
-                    mask = lensing_model.indices[lensing_model.n_images*pb] : lensing_model.indices[lensing_model.n_images*(pb+1)]
-                    loglike += self.loglikelihood(x[mask], y[mask], self.yerr[mask], log_prior, magnification_matrix[mask, mask])
+                    loglike += self.loglikelihood(x[lensing_model.indices[lensing_model.n_images*pb] : lensing_model.indices[lensing_model.n_images*(pb+1)]], y[lensing_model.indices[lensing_model.n_images*pb] : lensing_model.indices[lensing_model.n_images*(pb+1)]], self.yerr[lensing_model.indices[lensing_model.n_images*pb] : lensing_model.indices[lensing_model.n_images*(pb+1)]], log_prior, magnification_matrix[lensing_model.indices[lensing_model.n_images*pb] : lensing_model.indices[lensing_model.n_images*(pb+1)], lensing_model.indices[lensing_model.n_images*pb] : lensing_model.indices[lensing_model.n_images*(pb+1)]])
                 else:
                     raise Exception("Fitting data in multiple filters without a lensing model is functionality that has not yet been added.")
         
