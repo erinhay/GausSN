@@ -9,10 +9,12 @@ class LensingModel:
     
     Lensing parameters should be inputted as [delta_image2, beta_image2, delta_image3, beta_image3, ... , delta_imageN, beta_imageN].
     """
-    def __init__(self, lensing_params, n_images, n_bands, indices = None):
+    def __init__(self, lensing_params):
         self.lensing_params = lensing_params
         self.deltas = jnp.array([0] + self.lensing_params[::2])
         self.betas = jnp.array([1] + self.lensing_params[1::2])
+        
+    def _import_from_gp(self, n_images, n_bands, indices):
         self.n_images = n_images
         self.n_bands = n_bands
         self.indices = indices
@@ -34,14 +36,11 @@ class LensingModel:
         return np.repeat(beta, len(x))
 
     def magnification_matrix(self, x):
-        self.magnification_vector = np.ones(len(x))
-        for pb in range(self.n_bands):
-            for n in range(self.n_images):
-                self.magnification_vector[self.indices[(self.n_images*pb)+n] : self.indices[(self.n_images*pb)+n+1]] = self.constant(x[self.indices[(self.n_images*pb)+n] : self.indices[(self.n_images*pb)+n+1]], self.betas[n])
+        self.magnification_vector = jnp.repeat(jnp.tile(self.betas, self.n_bands), self.indices[1:]-self.indices[:-1])
         return jnp.diag(self.magnification_vector)
 
     def time_shift(self, x):
-        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), jnp.array(self.indices[1:])-jnp.array(self.indices[:-1]))
+        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.indices[1:]-self.indices[:-1])
         return x - delta_vector
     
 
@@ -56,13 +55,15 @@ class SigmoidMicrolensing_LensingModel:
     Lensing parameters should be inputted as [delta_image2, beta0_image2, beta1_image2, r_image2, t0_image2, ... , delta_imageN, beta0_imageN, beta1_imageN, r_imageN, t0_imageN].
     """
     
-    def __init__(self, lensing_params, n_images, n_bands, indices = None):
+    def __init__(self, lensing_params):
         self.lensing_params = lensing_params
         self.deltas = jnp.array([0] + self.lensing_params[::5])
         self.beta0s = jnp.array([1] + self.lensing_params[1::5])
         self.beta1s = jnp.array([1] + self.lensing_params[2::5])
         self.rs = jnp.array([0] + self.lensing_params[3::5])
         self.t0s = jnp.array([0] + self.lensing_params[4::5])
+        
+    def _import_from_gp(self, n_images, n_bands, indices):
         self.n_images = n_images
         self.n_bands = n_bands
         self.indices = indices
@@ -96,7 +97,7 @@ class SigmoidMicrolensing_LensingModel:
         return jnp.diag(self.magnification_vector)
     
     def time_shift(self, x):
-        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), jnp.array(self.indices[1:])-jnp.array(self.indices[:-1]))
+        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.indices[1:]-self.indices[:-1])
         return x - delta_vector
     
     
