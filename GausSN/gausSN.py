@@ -140,7 +140,7 @@ class GP:
         
         return loglike
         
-    def jointprobability(self, params, logprior = None, lensing_model = None, fix_mean_params = False, fix_kernel_params = False, invert=False):
+    def jointprobability(self, params, logprior = None, lensing_model = None, fix_mean_params = False, fix_kernel_params = False, invert=1):
         """
         Compute the joint probability of the kernel, mean function, and/or lensing parameters (if applicable).
         """
@@ -150,10 +150,9 @@ class GP:
             lensing_params = [params[i+self.ndim-len(lensing_model.lensing_params)] for i in range(len(lensing_model.lensing_params))]
             lensing_model.reset(lensing_params)
             x = lensing_model.time_shift(self.x)
-            magnification_matrix = lensing_model.magnification_matrix(x)
+            self.magnification_matrix = lensing_model.magnification_matrix(x)
         else:
-            x = self.x
-            y = self.y      
+            x = self.x    
         
         # Reset the kernel and/or mean function parameters
         if not fix_kernel_params:
@@ -166,7 +165,7 @@ class GP:
         # Compute the log prior for the given parameters
         log_prior = logprior(params)
         if jnp.isinf(log_prior) or jnp.isnan(log_prior):
-            return -jnp.inf
+            return invert * -jnp.inf
  
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
@@ -175,18 +174,14 @@ class GP:
         for pb in range(self.n_bands):
             start = self.indices[self.n_images*pb]
             stop = self.indices[self.n_images*(pb+1)]
-            loglike += self.loglikelihood(x[start : stop], self.y[start : stop], self.yerr[start : stop], magnification_matrix[start : stop, start : stop])
+            loglike += self.loglikelihood(x[start : stop], self.y[start : stop], self.yerr[start : stop], self.magnification_matrix[start : stop, start : stop])
         loglike += log_prior
         
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
         if jnp.isinf(loglike) or jnp.isnan(loglike):
-            if invert:
-                return jnp.inf
-            return -jnp.inf
+            return invert * -jnp.inf
             
-        if invert:
-            return -loglike
-        return loglike
+        return invert * loglike
     
     def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, lensing_model=None, fix_mean_params = False, fix_kernel_params = False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
         """
@@ -280,6 +275,9 @@ class GP:
         self.mean = jnp.array(self.meanfunc.mean(self.x))
         self.cov = jnp.array(self.kernel.covariance(self.x, self.x))
         
+        # Set placeholder in case of no lensing model
+        self.magnification_matrix = np.eye(self.cov.shape[0])
+        
         if method == 'dynesty':
                 
             nlive = sampler_kwargs.pop('nlive', 500)
@@ -296,7 +294,7 @@ class GP:
             init_guess, init_guess_scale = self._get_initial_guess(fix_mean_params, fix_kernel_params, lensing_model)
 
             if method == 'minimize': 
-                results = minimize(self.jointprobability, init_guess, args = (logprior, lensing_model, fix_mean_params, fix_kernel_params, True), **minimize_kwargs)
+                results = minimize(self.jointprobability, init_guess, args = (logprior, lensing_model, fix_mean_params, fix_kernel_params, -1), **minimize_kwargs)
                 return results
 
             if np.isinf(np.any(logprior(init_guess))):
