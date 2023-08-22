@@ -63,7 +63,7 @@ class GP:
         self.kernel = kernel
         self.meanfunc = meanfunc
         
-    def _prepare_indices(self, band, image):
+    def _prepare_indices(self, x, band, image):
         # Store n_bands/images information
         self.n_bands = len(np.unique(band))
         self.n_images = len(np.unique(image))
@@ -255,7 +255,7 @@ class GP:
         self.yerr = jnp.array(yerr)
         
         # Store n_bands, n_images, and indices information
-        self._prepare_indices(band, image)
+        self._prepare_indices(self.x, band, image)
         
         # Determine the number of dimensions for optimization/sampling
         self.ndim = 0
