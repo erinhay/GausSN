@@ -158,7 +158,7 @@ class GP:
             lensing_params = [params[i+self.ndim-len(lensing_model.lensing_params)] for i in range(len(lensing_model.lensing_params))]
             lensing_model.reset(lensing_params)
             x = lensing_model.time_shift(self.x)
-            self.magnification_matrix = lensing_model.magnification_matrix(x)
+            self.magnification_matrix = lensing_model.jit_magnification_matrix(x)
         else:
             x = self.x    
         
@@ -173,8 +173,7 @@ class GP:
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
         # Therefore, we take the log likelihood of each band separately and sum them
-        mm = jnp.diag(self.magnification_matrix)
-        mm = mm.reshape((self.n_bands, self.repeats*self.n_images))
+        mm = self.magnification_matrix.reshape((self.n_bands, self.repeats*self.n_images))
         mm = jnp.tile(jnp.eye(self.repeats*self.n_images), (self.n_bands, 1, 1))*mm[:, np.newaxis]
         vmap_x = x.reshape((self.n_bands, self.repeats*self.n_images))
         vmap_y = self.y.reshape((self.n_bands, self.repeats*self.n_images))
@@ -284,7 +283,7 @@ class GP:
         self.cov = jnp.array(self.kernel.covariance(self.x, self.x))
         
         # Set placeholder in case of no lensing model
-        self.magnification_matrix = np.eye(self.cov.shape[0])
+        self.magnification_matrix = jnp.eye(self.cov.shape[0])
         
         if method == 'dynesty':
                 

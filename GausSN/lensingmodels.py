@@ -16,6 +16,8 @@ class LensingModel:
         self.lensing_params = lensing_params
         self.deltas = jnp.array([0] + self.lensing_params[::2])
         self.betas = jnp.array([1] + self.lensing_params[1::2])
+        self.jit_constant = jax.jit(self.constant)
+        self.jit_magnification_matrix = self.magnification_matrix
         
     def _import_from_gp(self, n_images, n_bands, indices):
         self.n_images = n_images
@@ -48,11 +50,12 @@ class LensingModel:
         return jnp.repeat(beta, len(x))
 
     def magnification_matrix(self, x):
-        vmap_constant = jax.vmap(self.constant, in_axes = (None, 0))
+        vmap_constant = jax.vmap(self.jit_constant, in_axes = (None, 0))
         self.magnification_vector = vmap_constant(x, self.betas)
         self.magnification_vector = self.magnification_vector * self.magnification_mask
         self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
-        return jnp.diag(self.magnification_vector)
+        return self.magnification_vector
+        #return jnp.diag(self.magnification_vector)
 
     def time_shift(self, x):
         delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.indices[1:]-self.indices[:-1])
@@ -77,6 +80,8 @@ class SigmoidMicrolensing_LensingModel:
         self.beta1s = jnp.array([1] + self.lensing_params[2::5])
         self.rs = jnp.array([0] + self.lensing_params[3::5])
         self.t0s = jnp.array([0] + self.lensing_params[4::5])
+        self.jit_sigmoid = jax.jit(self.sigmoid)
+        self.jit_magnification_matrix = self.magnification_matrix
 
     def _import_from_gp(self, n_images, n_bands, indices):
         self.n_images = n_images
@@ -115,11 +120,12 @@ class SigmoidMicrolensing_LensingModel:
         return beta0 + (num/denom)
 
     def magnification_matrix(self, x):
-        vmap_sigmoid = jax.vmap(self.sigmoid, in_axes = (None, 0, 0, 0, 0))
+        vmap_sigmoid = jax.vmap(self.jit_sigmoid, in_axes = (None, 0, 0, 0, 0))
         self.magnification_vector = vmap_sigmoid(x, self.beta0s, self.beta1s, self.rs, self.t0s)
         self.magnification_vector = self.magnification_vector * self.magnification_mask
         self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
-        return jnp.diag(self.magnification_vector)
+        return self.magnification_vector
+        #return jnp.diag(self.magnification_vector)
     
     def time_shift(self, x):
         delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
