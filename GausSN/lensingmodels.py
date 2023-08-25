@@ -24,6 +24,14 @@ class LensingModel:
         
         self.scale = [5, 0.5]*(self.n_images-1)
         
+    def _prepare_magnification_mask(self, x):
+        self.magnification_mask = np.zeros((self.n_images, len(x)))
+        for pb in range(self.n_bands):
+            for n in range(self.n_images):
+                start = self.indices[self.n_images*pb + n]
+                stop = self.indices[self.n_images*pb + n + 1]
+                self.magnification_mask[n, start : stop] = 1
+        
     def reset(self, lensing_params):
         self.lensing_params = lensing_params
         self.deltas = jnp.array([0] + self.lensing_params[::2])
@@ -39,7 +47,10 @@ class LensingModel:
         return np.repeat(beta, len(x))
 
     def magnification_matrix(self, x):
-        self.magnification_vector = jnp.repeat(jnp.tile(self.betas, self.n_bands), self.indices[1:]-self.indices[:-1])
+        vmap_constant = jax.vmap(self.constant, in_axes = (None, 0))
+        self.magnification_vector = vmap_constant(x, self.betas)
+        self.magnification_vector = self.magnification_vector * self.magnification_mask
+        self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
         return jnp.diag(self.magnification_vector)
 
     def time_shift(self, x):
