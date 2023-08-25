@@ -1,4 +1,5 @@
 import numpy as np
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 try:
@@ -17,6 +18,8 @@ try:
     import zeus
 except:
     pass
+
+jax.config.update('jax_enable_x64', True)
 
 class GP:
     """
@@ -62,6 +65,7 @@ class GP:
         """
         self.kernel = kernel
         self.meanfunc = meanfunc
+        self.jit_loglikelihood = jax.jit(self.loglikelihood)
         
     def _prepare_indices(self, x, band, image):
         # Store n_bands/images information
@@ -117,16 +121,16 @@ class GP:
         """
         return 0
     
-    def loglikelihood(self, x, y, yerr, magnification_matrix=1):
+    def loglikelihood(self, x, y, yerr, magnification_matrix):
         """
         Compute the log likelihood of a multivariate normal PDF.
         """
         # Compute the mean vector for the given input data points x
-        self.mean = jnp.array(self.meanfunc.mean(x))
+        self.mean = self.meanfunc.mean(x)
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
-        K = jnp.array(self.kernel.covariance(x, x))
+        K = self.kernel.covariance(x, x)
         self.cov = jnp.dot(jnp.dot(magnification_matrix, K), magnification_matrix) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
@@ -137,13 +141,17 @@ class GP:
         
         # Compute the log likelihood of a MVN PDF
         loglike = -0.5*(a + b)
-        
         return loglike
         
     def jointprobability(self, params, logprior = None, lensing_model = None, fix_mean_params = False, fix_kernel_params = False, invert=1):
         """
         Compute the joint probability of the kernel, mean function, and/or lensing parameters (if applicable).
         """
+
+        # Compute the log prior for the given parameters
+        log_prior = logprior(params)
+        if jnp.isinf(log_prior) or jnp.isnan(log_prior):
+            return invert * -jnp.inf
         
         # Reset the lensing parameters, re-create the magnification matrix, and modify data as appropriate
         if lensing_model != None:
@@ -161,21 +169,20 @@ class GP:
         if not fix_mean_params:
             meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
             self.meanfunc.reset(meanfunc_params)
-        
-        # Compute the log prior for the given parameters
-        log_prior = logprior(params)
-        if jnp.isinf(log_prior) or jnp.isnan(log_prior):
-            return invert * -jnp.inf
  
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
         # Therefore, we take the log likelihood of each band separately and sum them
-        loglike = 0
-        for pb in range(self.n_bands):
-            start = self.indices[self.n_images*pb]
-            stop = self.indices[self.n_images*(pb+1)]
-            loglike += self.loglikelihood(x[start : stop], self.y[start : stop], self.yerr[start : stop], self.magnification_matrix[start : stop, start : stop])
-        loglike += log_prior
+        mm = jnp.diag(self.magnification_matrix)
+        mm = mm.reshape((self.n_bands, self.repeats*self.n_images))
+        mm = jnp.tile(jnp.eye(self.repeats*self.n_images), (self.n_bands, 1, 1))*mm[:, np.newaxis]
+        vmap_x = x.reshape((self.n_bands, self.repeats*self.n_images))
+        vmap_y = self.y.reshape((self.n_bands, self.repeats*self.n_images))
+        vmap_yerr = self.yerr.reshape((self.n_bands, self.repeats*self.n_images))
+
+        vmap_jit_loglikelihood = jax.vmap(self.jit_loglikelihood)
+        loglikes = vmap_jit_loglikelihood(vmap_x, vmap_y, vmap_yerr, mm)
+        loglike = np.sum(loglikes) + log_prior
         
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
         if jnp.isinf(loglike) or jnp.isnan(loglike):
@@ -264,6 +271,7 @@ class GP:
             self.y, self.yerr = lensing_model.rescale_data(self.y, self.yerr)
             # Pass necessary index, image, and band info to lensing model class
             lensing_model._import_from_gp(self.n_images, self.n_bands, self.indices)
+            lensing_model._prepare_magnification_mask(self.x)
         
         # Set the loglikelihood/logprior to the default multi-variate normal likelihood specified within the GP class function, if not otherwise specified
         if loglikelihood == None:

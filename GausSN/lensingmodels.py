@@ -1,5 +1,8 @@
 import numpy as np
+import jax
 import jax.numpy as jnp
+
+jax.config.update('jax_enable_x64', True)
 
 class LensingModel:
     """
@@ -62,13 +65,22 @@ class SigmoidMicrolensing_LensingModel:
         self.beta1s = jnp.array([1] + self.lensing_params[2::5])
         self.rs = jnp.array([0] + self.lensing_params[3::5])
         self.t0s = jnp.array([0] + self.lensing_params[4::5])
-        
+
     def _import_from_gp(self, n_images, n_bands, indices):
         self.n_images = n_images
         self.n_bands = n_bands
         self.indices = indices
+        self.repeats = self.indices[1:]-self.indices[:-1]
         
         self.scale = [5, 0.5, 0.5, 0.5, 10]*(self.n_images-1)
+
+    def _prepare_magnification_mask(self, x):
+        self.magnification_mask = np.zeros((self.n_images, len(x)))
+        for pb in range(self.n_bands):
+            for n in range(self.n_images):
+                start = self.indices[self.n_images*pb + n]
+                stop = self.indices[self.n_images*pb + n + 1]
+                self.magnification_mask[n, start : stop] = 1
         
     def reset(self, lensing_params):
         self.lensing_params = lensing_params
@@ -90,14 +102,14 @@ class SigmoidMicrolensing_LensingModel:
         return beta0 + (num/denom)
 
     def magnification_matrix(self, x):
-        self.magnification_vector = np.ones(len(x))
-        for pb in range(self.n_bands):
-            for n in range(self.n_images):
-                self.magnification_vector[self.indices[(self.n_images*pb)+n] : self.indices[(self.n_images*pb)+n+1]] = self.sigmoid(x[self.indices[(self.n_images*pb)+n] : self.indices[(self.n_images*pb)+n+1]], self.beta0s[n], self.beta1s[n], self.rs[n], self.t0s[n])
+        vmap_sigmoid = jax.vmap(self.sigmoid, in_axes = (None, 0, 0, 0, 0))
+        self.magnification_vector = vmap_sigmoid(x, self.beta0s, self.beta1s, self.rs, self.t0s)
+        self.magnification_vector = self.magnification_vector * self.magnification_mask
+        self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
         return jnp.diag(self.magnification_vector)
     
     def time_shift(self, x):
-        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.indices[1:]-self.indices[:-1])
+        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
         return x - delta_vector
     
     
