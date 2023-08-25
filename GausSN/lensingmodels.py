@@ -31,6 +31,7 @@ class LensingModel:
                 start = self.indices[self.n_images*pb + n]
                 stop = self.indices[self.n_images*pb + n + 1]
                 self.magnification_mask[n, start : stop] = 1
+        self.magnification_mask = jnp.array(self.magnification_mask)
         
     def reset(self, lensing_params):
         self.lensing_params = lensing_params
