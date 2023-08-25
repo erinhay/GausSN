@@ -13,11 +13,10 @@ class LensingModel:
     Lensing parameters should be inputted as [delta_image2, beta_image2, delta_image3, beta_image3, ... , delta_imageN, beta_imageN].
     """
     def __init__(self, lensing_params):
-        self.lensing_params = lensing_params
-        self.deltas = jnp.array([0] + self.lensing_params[::2])
-        self.betas = jnp.array([1] + self.lensing_params[1::2])
-        self.jit_constant = jax.jit(self.constant)
-        self.jit_magnification_matrix = self.magnification_matrix
+        self.deltas = jnp.array([0] + lensing_params[::2])
+        self.betas = jnp.array([1] + lensing_params[1::2])
+        self.jit_time_shift = jax.jit(self._time_shift)
+        self.jit_magnification_matrix = jax.jit(self._magnification_matrix)
         
     def _import_from_gp(self, n_images, n_bands, indices):
         self.n_images = n_images
@@ -25,8 +24,34 @@ class LensingModel:
         self.indices = indices
         
         self.scale = [5, 0.5]*(self.n_images-1)
+
+    def _reset(self, lensing_params):
+        self.deltas = jnp.array([0] + lensing_params[::2])
+        self.betas = jnp.array([1] + lensing_params[1:][::2])
+        return self.deltas, self.betas
+    
+    def _time_shift(self, x, deltas):
+        delta_vector = jnp.repeat(jnp.tile(deltas, self.n_bands), self.indices[1:]-self.indices[:-1])
+        return x - delta_vector
+    
+    def _lens(self, x, beta):
+        return jnp.repeat(beta, len(x))
+
+    def _magnification_matrix(self, x, betas):
+        vmap_lens = jax.vmap(self._lens, in_axes = (None, 0))
+        self.magnification_vector = vmap_lens(x, betas)
+        self.magnification_vector = self.magnification_vector * self.magnification_mask
+        self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
+        return self.magnification_vector
+        #return jnp.diag(self.magnification_vector)
+
+    def rescale_data(self, y, yerr):
+        factor = jnp.max(y) - jnp.min(y)
+        y_rescaled = y/factor
+        yerr_rescaled = yerr/factor
+        return y_rescaled, yerr_rescaled
         
-    def _prepare_magnification_mask(self, x):
+    def prepare_magnification_mask(self, x):
         self.magnification_mask = np.zeros((self.n_images, len(x)))
         for pb in range(self.n_bands):
             for n in range(self.n_images):
@@ -34,32 +59,12 @@ class LensingModel:
                 stop = self.indices[self.n_images*pb + n + 1]
                 self.magnification_mask[n, start : stop] = 1
         self.magnification_mask = jnp.array(self.magnification_mask)
-        
-    def reset(self, lensing_params):
-        self.lensing_params = lensing_params
-        self.deltas = jnp.array([0] + self.lensing_params[::2])
-        self.betas = jnp.array([1] + self.lensing_params[1:][::2])
-        
-    def rescale_data(self, y, yerr):
-        factor = jnp.max(y) - jnp.min(y)
-        y_rescaled = y/factor
-        yerr_rescaled = yerr/factor
-        return y_rescaled, yerr_rescaled
-    
-    def constant(self, x, beta):
-        return jnp.repeat(beta, len(x))
 
-    def magnification_matrix(self, x):
-        vmap_constant = jax.vmap(self.jit_constant, in_axes = (None, 0))
-        self.magnification_vector = vmap_constant(x, self.betas)
-        self.magnification_vector = self.magnification_vector * self.magnification_mask
-        self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
-        return self.magnification_vector
-        #return jnp.diag(self.magnification_vector)
-
-    def time_shift(self, x):
-        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.indices[1:]-self.indices[:-1])
-        return x - delta_vector
+    def model(self, x, lensing_params):
+        self.deltas, self.betas = self._reset(lensing_params)
+        self.shifted_times = self.jit_time_shift(x, self.deltas)
+        self.magnification_vector = self.jit_magnification_matrix(x, self.betas)
+        return self.shifted_times, self.magnification_vector
     
 
 class SigmoidMicrolensing_LensingModel:
@@ -74,16 +79,40 @@ class SigmoidMicrolensing_LensingModel:
     """
     
     def __init__(self, lensing_params):
-        self.lensing_params = lensing_params
-        self.deltas = jnp.array([0] + self.lensing_params[::5])
-        self.beta0s = jnp.array([1] + self.lensing_params[1::5])
-        self.beta1s = jnp.array([1] + self.lensing_params[2::5])
-        self.rs = jnp.array([0] + self.lensing_params[3::5])
-        self.t0s = jnp.array([0] + self.lensing_params[4::5])
-        self.jit_sigmoid = jax.jit(self.sigmoid)
-        self.jit_magnification_matrix = self.magnification_matrix
+        self.deltas = jnp.array([0] + lensing_params[::5])
+        self.beta0s = jnp.array([1] + lensing_params[1::5])
+        self.beta1s = jnp.array([1] + lensing_params[2::5])
+        self.rs = jnp.array([0] + lensing_params[3::5])
+        self.t0s = jnp.array([0] + lensing_params[4::5])
+        self.jit_time_shift = jax.jit(self._time_shift)
+        self.jit_magnification_matrix = jax.jit(self._magnification_matrix)
 
-    def _import_from_gp(self, n_images, n_bands, indices):
+    def _reset(self, lensing_params):
+        self.deltas = jnp.array([0] + lensing_params[::5])
+        self.beta0s = jnp.array([1] + lensing_params[1::5])
+        self.beta1s = jnp.array([1] + lensing_params[2::5])
+        self.rs = jnp.array([1] +  lensing_params[3::5])
+        self.t0s = jnp.array([1] + lensing_params[4::5])
+        return self.deltas, self.beta0s, self.beta1s, self.rs, self.t0s
+
+    def _time_shift(self, x, deltas):
+        delta_vector = jnp.repeat(jnp.tile(deltas, self.n_bands), self.repeats)
+        return x - delta_vector
+    
+    def _lens(self, x, beta0, beta1, r, t0):
+        num = beta1 - beta0
+        denom = 1 + (jnp.e ** ( - r * (x - t0) ) )
+        return beta0 + (num/denom)
+    
+    def _magnification_matrix(self, x, beta0s, beta1s, rs, t0s):
+        vmap_lens = jax.vmap(self._lens, in_axes = (None, 0, 0, 0, 0))
+        self.magnification_vector = vmap_lens(x, beta0s, beta1s, rs, t0s)
+        self.magnification_vector = self.magnification_vector * self.magnification_mask
+        self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
+        return self.magnification_vector
+        #return jnp.diag(self.magnification_vector)
+
+    def import_from_gp(self, n_images, n_bands, indices):
         self.n_images = n_images
         self.n_bands = n_bands
         self.indices = indices
@@ -91,7 +120,13 @@ class SigmoidMicrolensing_LensingModel:
         
         self.scale = [5, 0.5, 0.5, 0.5, 10]*(self.n_images-1)
 
-    def _prepare_magnification_mask(self, x):
+    def rescale_data(self, y, yerr):
+        factor = jnp.max(y) - jnp.min(y)
+        y_rescaled = y/factor
+        yerr_rescaled = yerr/factor
+        return y_rescaled, yerr_rescaled
+
+    def prepare_magnification_mask(self, x):
         self.magnification_mask = np.zeros((self.n_images, len(x)))
         for pb in range(self.n_bands):
             for n in range(self.n_images):
@@ -99,36 +134,12 @@ class SigmoidMicrolensing_LensingModel:
                 stop = self.indices[self.n_images*pb + n + 1]
                 self.magnification_mask[n, start : stop] = 1
         self.magnification_mask = jnp.array(self.magnification_mask)
-        
-    def reset(self, lensing_params):
-        self.lensing_params = lensing_params
-        self.deltas = jnp.array([0] + self.lensing_params[::5])
-        self.beta0s = jnp.array([1] + self.lensing_params[1::5])
-        self.beta1s = jnp.array([1] + self.lensing_params[2::5])
-        self.rs = jnp.array([1] + self.lensing_params[3::5])
-        self.t0s = jnp.array([1] + self.lensing_params[4::5])
-        
-    def rescale_data(self, y, yerr):
-        factor = jnp.max(y) - jnp.min(y)
-        y_rescaled = y/factor
-        yerr_rescaled = yerr/factor
-        return y_rescaled, yerr_rescaled
     
-    def sigmoid(self, x, beta0, beta1, r, t0):
-        num = beta1 - beta0
-        denom = 1 + (jnp.e ** ( - r * (x - t0) ) )
-        return beta0 + (num/denom)
+    def model(self, x, lensing_params):
+        self.deltas, self.beta0s, self.beta1s, self.rs, self.t0s = self._reset(lensing_params)
+        self.shifted_times = self.jit_time_shift(x, self.deltas)
+        self.magnification_vector = self.jit_magnification_matrix(x, self.beta0s, self.beta1s, self.rs, self.t0s)
+        return self.shifted_times, self.magnification_vector
 
-    def magnification_matrix(self, x):
-        vmap_sigmoid = jax.vmap(self.jit_sigmoid, in_axes = (None, 0, 0, 0, 0))
-        self.magnification_vector = vmap_sigmoid(x, self.beta0s, self.beta1s, self.rs, self.t0s)
-        self.magnification_vector = self.magnification_vector * self.magnification_mask
-        self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
-        return self.magnification_vector
-        #return jnp.diag(self.magnification_vector)
-    
-    def time_shift(self, x):
-        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
-        return x - delta_vector
     
     

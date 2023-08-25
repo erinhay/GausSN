@@ -156,11 +156,9 @@ class GP:
         # Reset the lensing parameters, re-create the magnification matrix, and modify data as appropriate
         if lensing_model != None:
             lensing_params = [params[i+self.ndim-len(lensing_model.lensing_params)] for i in range(len(lensing_model.lensing_params))]
-            lensing_model.reset(lensing_params)
-            x = lensing_model.time_shift(self.x)
-            self.magnification_matrix = lensing_model.jit_magnification_matrix(x)
+            x, self.magnification_matrix = lensing_model.model(self.x, lensing_params)
         else:
-            x = self.x    
+            x = self.x
         
         # Reset the kernel and/or mean function parameters
         if not fix_kernel_params:
@@ -269,8 +267,8 @@ class GP:
             self.ndim += len(lensing_model.lensing_params)
             self.y, self.yerr = lensing_model.rescale_data(self.y, self.yerr)
             # Pass necessary index, image, and band info to lensing model class
-            lensing_model._import_from_gp(self.n_images, self.n_bands, self.indices)
-            lensing_model._prepare_magnification_mask(self.x)
+            lensing_model.import_from_gp(self.n_images, self.n_bands, self.indices)
+            lensing_model.prepare_magnification_mask(self.x)
         
         # Set the loglikelihood/logprior to the default multi-variate normal likelihood specified within the GP class function, if not otherwise specified
         if loglikelihood == None:
