@@ -13,6 +13,7 @@ class LensingModel:
     Lensing parameters should be inputted as [delta_image2, beta_image2, delta_image3, beta_image3, ... , delta_imageN, beta_imageN].
     """
     def __init__(self, lensing_params):
+        self.lensing_params = lensing_params
         self.deltas = jnp.array([0] + lensing_params[::2])
         self.betas = jnp.array([1] + lensing_params[1::2])
         self.jit_time_shift = jax.jit(self._time_shift)
@@ -26,6 +27,7 @@ class LensingModel:
         self.scale = [5, 0.5]*(self.n_images-1)
 
     def _reset(self, lensing_params):
+        self.lensing_params = lensing_params
         self.deltas = jnp.array([0] + lensing_params[::2])
         self.betas = jnp.array([1] + lensing_params[1:][::2])
         return self.deltas, self.betas
@@ -79,6 +81,7 @@ class SigmoidMicrolensing_LensingModel:
     """
     
     def __init__(self, lensing_params):
+        self.lensing_params = lensing_params
         self.deltas = jnp.array([0] + lensing_params[::5])
         self.beta0s = jnp.array([1] + lensing_params[1::5])
         self.beta1s = jnp.array([1] + lensing_params[2::5])
@@ -88,6 +91,7 @@ class SigmoidMicrolensing_LensingModel:
         self.jit_magnification_matrix = jax.jit(self._magnification_matrix)
 
     def _reset(self, lensing_params):
+        self.lensing_params = lensing_params
         self.deltas = jnp.array([0] + lensing_params[::5])
         self.beta0s = jnp.array([1] + lensing_params[1::5])
         self.beta1s = jnp.array([1] + lensing_params[2::5])
