@@ -44,7 +44,7 @@ class LensingModel:
         return y_rescaled, yerr_rescaled
     
     def constant(self, x, beta):
-        return np.repeat(beta, len(x))
+        return jnp.repeat(beta, len(x))
 
     def magnification_matrix(self, x):
         vmap_constant = jax.vmap(self.constant, in_axes = (None, 0))
@@ -92,6 +92,7 @@ class SigmoidMicrolensing_LensingModel:
                 start = self.indices[self.n_images*pb + n]
                 stop = self.indices[self.n_images*pb + n + 1]
                 self.magnification_mask[n, start : stop] = 1
+        self.magnification_mask = jnp.array(self.magnification_mask)
         
     def reset(self, lensing_params):
         self.lensing_params = lensing_params
@@ -109,7 +110,7 @@ class SigmoidMicrolensing_LensingModel:
     
     def sigmoid(self, x, beta0, beta1, r, t0):
         num = beta1 - beta0
-        denom = 1 + (np.e ** ( - r * (x - t0) ) )
+        denom = 1 + (jnp.e ** ( - r * (x - t0) ) )
         return beta0 + (num/denom)
 
     def magnification_matrix(self, x):
