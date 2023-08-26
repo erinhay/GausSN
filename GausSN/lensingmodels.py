@@ -18,13 +18,6 @@ class LensingModel:
         self.betas = jnp.array([1] + lensing_params[1::2])
         self.jit_time_shift = jax.jit(self._time_shift)
         self.jit_magnification_matrix = jax.jit(self._magnification_matrix)
-        
-    def _import_from_gp(self, n_images, n_bands, indices):
-        self.n_images = n_images
-        self.n_bands = n_bands
-        self.indices = indices
-        
-        self.scale = [5, 0.5]*(self.n_images-1)
 
     def _reset(self, lensing_params):
         self.lensing_params = lensing_params
@@ -33,7 +26,7 @@ class LensingModel:
         return self.deltas, self.betas
     
     def _time_shift(self, x, deltas):
-        delta_vector = jnp.repeat(jnp.tile(deltas, self.n_bands), self.indices[1:]-self.indices[:-1])
+        delta_vector = jnp.repeat(jnp.tile(deltas, self.n_bands), self.repeats)
         return x - delta_vector
     
     def _lens(self, x, beta):
@@ -46,6 +39,14 @@ class LensingModel:
         self.magnification_vector = jnp.sum(self.magnification_vector, axis=0)
         return self.magnification_vector
         #return jnp.diag(self.magnification_vector)
+
+    def import_from_gp(self, n_images, n_bands, indices):
+        self.n_images = n_images
+        self.n_bands = n_bands
+        self.indices = indices
+        self.repeats = self.indices[1:]-self.indices[:-1]
+        
+        self.scale = [5, 0.5]*(self.n_images-1)
 
     def rescale_data(self, y, yerr):
         factor = jnp.max(y) - jnp.min(y)
@@ -105,7 +106,7 @@ class SigmoidMicrolensing_LensingModel:
     
     def _lens(self, x, beta0, beta1, r, t0):
         num = beta1 - beta0
-        denom = 1 + (jnp.e ** ( - r * (x - t0) ) )
+        denom = 1 + (jnp.exp( - r * (x - t0) ) )
         return beta0 + (num/denom)
     
     def _magnification_matrix(self, x, beta0s, beta1s, rs, t0s):
