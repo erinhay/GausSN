@@ -16,9 +16,9 @@ parser.add_argument("--method", default='dynesty', help="Sampling method. Choice
 parser.add_argument("lcpath", help="Path to folder with glSNe light curve files.")
 parser.add_argument("savepath", help="Path to a folder where output files will be saved.")
 args = parser.parse_args()
-    
+
 def run_gaussn(snid, data):
-                                        
+
     print('Initializing GP')
     meanfunc_params = [0]
     meanfunc = meanfuncs.UniformMean(meanfunc_params)
@@ -31,7 +31,7 @@ def run_gaussn(snid, data):
     peak_im2_loc = np.argmax(image2['flux'].rolling(3).mean())
     init_delta = image2.loc[peak_im2_loc]['time'] - image1.loc[peak_im1_loc]['time']
     init_beta = image2.loc[peak_im2_loc]['flux'] / image1.loc[peak_im1_loc]['flux']
-    
+
     lm = lensingmodels.SigmoidMicrolensing_LensingModel([init_delta, init_beta, init_beta, 0, np.mean(data['time'])])
 
     def ptform(u):
@@ -45,7 +45,7 @@ def run_gaussn(snid, data):
 
         delta_vector = np.repeat(np.tile([0, prior[0]], gp.n_bands), gp.indices[1:]-gp.indices[:-1])
         shifted_time = data['time'] - delta_vector
-    
+
         prior[4] = (u[4] * (np.max(shifted_time) - np.min(shifted_time))) + np.min(shifted_time)
 
         return(prior)
@@ -61,7 +61,7 @@ def run_gaussn(snid, data):
         beta1_r_mu = np.array([params[1], 0])
         beta1_r_sigma = np.diag(np.array([0.5, 0.5]))
         mnv_log_pdf = np.log(np.linalg.det(2 * np.pi * beta1_r_sigma)) + np.dot(np.transpose(np.array([params[2], params[3]]) - beta1_r_mu), np.linalg.solve(beta1_r_sigma, (np.array([params[2], params[3]]) - beta1_r_mu)))
-        
+
         return -0.5 * mnv_log_pdf
 
     print('Optimizing parameters')
@@ -80,7 +80,7 @@ if not os.path.exists(args.savepath) or not os.path.exists(args.lcpath):
 snType = args.lcpath.split('/')[-3]
 massModel = args.lcpath.split('/')[-2]
 param_names = ['delta', 'beta0', 'beta1', 'r', 't0']
-    
+
 try:
     output_table = Table.read(args.savepath+'summary_table_'+snType+'_'+massModel+'_'+str(args.method)+'.dat', format='ascii')
     output_dict = np.load(args.savepath+'summary_dict_'+snType+'_'+massModel+'_'+str(args.method)+'.npy', allow_pickle=True).item()
@@ -97,7 +97,7 @@ for fn in os.listdir(args.lcpath):
     
     print('Starting ', snid)
     starttime = time.time()
-    
+
     try:
         hdul = fits.open(args.lcpath+fn)
         data1 = Table(hdul[1].data)
@@ -126,16 +126,18 @@ for fn in os.listdir(args.lcpath):
     elif args.method == 'emcee':
         flat_chains = sampler.get_chain(discard=500, flat=True)
         np.savetxt(args.savepath+'chains/'+snType+'/'+massModel+'/'+snid+'_chains.dat', sampler.get_chain(flat=True))
-        
+
         for i, pn in enumerate(param_names):
             output_dict[snid][pn] = np.mean(flat_chains, axis=0)[i]
             output_dict[snid][pn+'_err'] = np.std(flat_chains, axis=0)[i]
         new_row = [snid, massModel, np.mean(flat_chains, axis=0)[2], np.std(flat_chains, axis=0)[2], np.mean(flat_chains, axis=0)[3], np.std(flat_chains, axis=0)[3]]
-            
+
     np.save(args.savepath+'summary_dict_'+snType+'_'+massModel+'_'+str(args.method)+'.npy', output_dict)
-        
+
     output_table.add_row(new_row)
     output_table.write(args.savepath+'summary_table_'+snType+'_'+massModel+'_'+str(args.method)+'.dat', format='ascii', overwrite=True)
-    
+
     endtime = time.time()
-    print(f'Done {snid} in {(endtime-starttime)/60} mins') 
+    print(f'Done {snid} in {(endtime-starttime)/60} mins')
+
+
