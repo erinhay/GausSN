@@ -313,7 +313,6 @@ class GP:
 
             nwalkers = sampler_kwargs.pop('nwalkers', 24)
             nsteps = run_sampler_kwargs.pop('nsteps', 1000)
-
             
             if method == 'emcee':
                 sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (logprior, lensing_model, fix_mean_params, fix_kernel_params, False), **sampler_kwargs)
