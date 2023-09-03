@@ -121,16 +121,16 @@ class GP:
         """
         return 0
     
-    def loglikelihood(self, x, y, yerr, magnification_matrix):
+    def loglikelihood(self, x, y, yerr, magnification_matrix, mean_params=None, kernel_params=None):
         """
         Compute the log likelihood of a multivariate normal PDF.
         """
         # Compute the mean vector for the given input data points x
-        self.mean = self.meanfunc.mean(x)
+        self.mean = self.meanfunc.mean(x, mean_params)
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
-        K = self.kernel.covariance(x, x)
+        K = self.kernel.covariance(x, x, kernel_params)
         self.cov = jnp.dot(jnp.dot(magnification_matrix, K), magnification_matrix) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
@@ -162,11 +162,9 @@ class GP:
         
         # Reset the kernel and/or mean function parameters
         if not fix_kernel_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-            self.kernel.reset(kernel_params)
+            kernel_params = [params[i] for i in range(self.kernel.ndim)]
         if not fix_mean_params:
-            meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
-            self.meanfunc.reset(meanfunc_params)
+            mean_params = [params[i+self.kernel.ndim] for i in range(self.meanfunc.ndim)]
  
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
@@ -178,7 +176,7 @@ class GP:
         vmap_yerr = self.yerr.reshape((self.n_bands, self.repeats*self.n_images))
 
         vmap_jit_loglikelihood = jax.vmap(self.jit_loglikelihood)
-        loglikes = vmap_jit_loglikelihood(vmap_x, vmap_y, vmap_yerr, mm)
+        loglikes = vmap_jit_loglikelihood(vmap_x, vmap_y, vmap_yerr, mm, mean_params, kernel_params)
         loglike = np.sum(loglikes) + log_prior
         
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
@@ -259,9 +257,9 @@ class GP:
         # Determine the number of dimensions for optimization/sampling
         self.ndim = 0
         if not fix_mean_params:
-            self.ndim += len(self.meanfunc.params)
+            self.ndim += self.meanfunc.ndim
         if not fix_kernel_params:
-            self.ndim += len(self.kernel.params)
+            self.ndim += self.kernel.ndim
         
         if lensing_model != None:
             self.ndim += len(lensing_model.lensing_params)
