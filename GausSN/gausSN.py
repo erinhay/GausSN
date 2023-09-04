@@ -101,10 +101,10 @@ class GP:
         init_guess = []
         init_guess_scale = []
         if not fix_kernel_params:
-            init_guess.extend(self.kernel.params)
+            init_guess.extend([params[i] for i in range(self.kernel.ndim)])
             init_guess_scale.extend(self.kernel.scale)
         if not fix_mean_params:
-            init_guess.extend(self.meanfunc.params)
+            init_guess.extend([params[i+self.kernel.ndim] for i in range(self.meanfunc.ndim)])
             init_guess_scale.extend(self.meanfunc.scale)
         if lensing_model:
             init_guess.extend(lensing_model.lensing_params)
@@ -162,9 +162,9 @@ class GP:
         
         # Reset the kernel and/or mean function parameters
         if not fix_kernel_params:
-            kernel_params = [params[i] for i in range(self.kernel.ndim)]
+            self.kernel_params = [params[i] for i in range(self.kernel.ndim)]
         if not fix_mean_params:
-            mean_params = [params[i+self.kernel.ndim] for i in range(self.meanfunc.ndim)]
+            self.mean_params = [params[i+self.kernel.ndim] for i in range(self.meanfunc.ndim)]
  
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
@@ -176,7 +176,7 @@ class GP:
         vmap_yerr = self.yerr.reshape((self.n_bands, self.repeats*self.n_images))
 
         vmap_jit_loglikelihood = jax.vmap(self.jit_loglikelihood)
-        loglikes = vmap_jit_loglikelihood(vmap_x, vmap_y, vmap_yerr, mm, mean_params, kernel_params)
+        loglikes = vmap_jit_loglikelihood(vmap_x, vmap_y, vmap_yerr, mm, self.mean_params, self.kernel_params)
         loglike = np.sum(loglikes) + log_prior
         
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
@@ -258,8 +258,12 @@ class GP:
         self.ndim = 0
         if not fix_mean_params:
             self.ndim += self.meanfunc.ndim
+        else:
+            self.mean_params = None
         if not fix_kernel_params:
             self.ndim += self.kernel.ndim
+        else:
+            self.kernel_params = None
         
         if lensing_model != None:
             self.ndim += len(lensing_model.lensing_params)
