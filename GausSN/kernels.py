@@ -1,6 +1,8 @@
 import numpy as np
 import jax.numpy as jnp
 
+jax.config.update('jax_enable_x64', True)
+
 class ExpSquaredKernel:
     """
     Moving kernel defined as A^2 * exp(-(y-y')^2 / (2*tau^2)).

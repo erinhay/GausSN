@@ -1,6 +1,8 @@
 import numpy as np
 import jax.numpy as jnp
 
+jax.config.update('jax_enable_x64', True)
+
 class UniformMean:
     def __init__(self, params):
         self.c = params[0]
