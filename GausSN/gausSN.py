@@ -175,7 +175,7 @@ class GP:
         vmap_y = self.y.reshape((self.n_bands, self.repeats*self.n_images))
         vmap_yerr = self.yerr.reshape((self.n_bands, self.repeats*self.n_images))
 
-        vmap_jit_loglikelihood = jax.vmap(self.jit_loglikelihood)
+        vmap_jit_loglikelihood = jax.vmap(self.jit_loglikelihood, in_axes=(0, 0, 0, 0, None, None))
         loglikes = vmap_jit_loglikelihood(vmap_x, vmap_y, vmap_yerr, mm, self.mean_params, self.kernel_params)
         loglike = np.sum(loglikes) + log_prior
         
