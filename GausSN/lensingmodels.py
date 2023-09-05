@@ -96,8 +96,8 @@ class SigmoidMicrolensing_LensingModel:
         self.deltas = jnp.array([0] + lensing_params[::5])
         self.beta0s = jnp.array([1] + lensing_params[1::5])
         self.beta1s = jnp.array([1] + lensing_params[2::5])
-        self.rs = jnp.array([1] +  lensing_params[3::5])
-        self.t0s = jnp.array([1] + lensing_params[4::5])
+        self.rs = jnp.array([0] +  lensing_params[3::5])
+        self.t0s = jnp.array([0] + lensing_params[4::5])
         return self.deltas, self.beta0s, self.beta1s, self.rs, self.t0s
 
     def _time_shift(self, x, deltas):
