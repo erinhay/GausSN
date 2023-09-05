@@ -66,7 +66,7 @@ class LensingModel:
     def model(self, x, lensing_params):
         self.deltas, self.betas = self._reset(lensing_params)
         self.shifted_times = self.jit_time_shift(x, self.deltas)
-        self.magnification_vector = self.jit_magnification_matrix(x, self.betas)
+        self.magnification_vector = self.jit_magnification_matrix(self.shifted_times, self.betas)
         return self.shifted_times, self.magnification_vector
     
 
@@ -143,7 +143,7 @@ class SigmoidMicrolensing_LensingModel:
     def model(self, x, lensing_params):
         self.deltas, self.beta0s, self.beta1s, self.rs, self.t0s = self._reset(lensing_params)
         self.shifted_times = self.jit_time_shift(x, self.deltas)
-        self.magnification_vector = self.jit_magnification_matrix(x, self.beta0s, self.beta1s, self.rs, self.t0s)
+        self.magnification_vector = self.jit_magnification_matrix(self.shifted_times, self.beta0s, self.beta1s, self.rs, self.t0s)
         return self.shifted_times, self.magnification_vector
 
     
