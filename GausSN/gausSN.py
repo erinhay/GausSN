@@ -94,7 +94,7 @@ class GP:
         self.indices = jnp.array(indices)
         self.repeats = jnp.max(self.indices[1:] - self.indices[:-1])
         
-    def _get_initial_guess(self, fix_mean_params, fix_kernel_params, lensing_model):
+    def _get_initial_guess(self, params, fix_mean_params, fix_kernel_params, lensing_model):
         """
         Put together the vector (init_guess) of parameters which the mean function, kernel, and/or lensing model (if applicable) are initialized with at the starting location for the optimization/sampling process. The parameters of the kernel are stacked first, followed by the mean function parameters, and finally the lensing parameters. For MCMC sampling, there will be some scatter enforced around the initial vector values. To set the scale of this scatter, an init_guess_scale vector is also compiled.
         """
@@ -134,7 +134,7 @@ class GP:
         self.cov = jnp.dot(jnp.dot(magnification_matrix, K), magnification_matrix) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
-        sign, a = jnp.linalg.slogdet(2 * jnp.pi * self.cov)
+        _, a = jnp.linalg.slogdet(2 * jnp.pi * self.cov)
         
         # Compute the term in the exponential of the PDF of a MVN PDF
         b = jnp.dot(jnp.transpose(self.mean - y), jnp.linalg.solve(self.cov, (self.mean - y)))
@@ -298,7 +298,7 @@ class GP:
         if method == 'emcee' or method == 'zeus' or method == 'minimize':
         
             # Get vector of initial parameters, which is required for optmizing/sampling with the minimize, emcee, and zeus methods
-            init_guess, init_guess_scale = self._get_initial_guess(fix_mean_params, fix_kernel_params, lensing_model)
+            init_guess, init_guess_scale = self._get_initial_guess(params, fix_mean_params, fix_kernel_params, lensing_model)
 
             if method == 'minimize': 
                 results = minimize(self.jointprobability, init_guess, args = (logprior, lensing_model, fix_mean_params, fix_kernel_params, -1), **minimize_kwargs)
