@@ -1,3 +1,4 @@
+#!/home/eeh55/.conda/envs/glsnEnv/bin/python3.10
 import os
 import argparse
 import time
@@ -36,17 +37,17 @@ def run_gaussn(snid, data):
 
     def ptform(u):
         prior = u
-        #prior[0] = (u[0] * 1)
-        #prior[1] = (u[1] * 10) + 20
-        prior[0] = (u[0] * 650) - 275
-        prior[1] = (u[1] * 52) + 0.1
-        prior[2] = norm.ppf(u[2], loc=prior[1], scale=0.5)
-        prior[3] = norm.ppf(u[3], loc=0, scale=0.5)
+        prior[0] = (u[0] * 1)
+        prior[1] = (u[1] * 10) + 20
+        prior[2] = (u[2] * 650) - 275
+        prior[3] = (u[3] * 52) + 0.1
+        prior[4] = norm.ppf(u[4], loc=prior[3], scale=0.5)
+        prior[5] = norm.ppf(u[5], loc=0, scale=0.5)
 
-        delta_vector = np.repeat(np.tile([0, prior[0]], gp.n_bands), gp.indices[1:]-gp.indices[:-1])
+        delta_vector = np.repeat(np.tile([0, prior[2]], gp.n_bands), gp.indices[1:]-gp.indices[:-1])
         shifted_time = data['time'] - delta_vector
 
-        prior[4] = (u[4] * (np.max(shifted_time) - np.min(shifted_time))) + np.min(shifted_time)
+        prior[6] = (u[6] * (np.max(shifted_time) - np.min(shifted_time))) + np.min(shifted_time)
 
         return(prior)
 
@@ -71,7 +72,7 @@ def run_gaussn(snid, data):
     elif args.method == 'dynesty':
         sampler = gp.optimize_parameters(x = data['time'], y = data['flux'], yerr = data['fluxerr'], band = data['band'], image = data['image'],
                                          method='dynesty', ptform=ptform, sampler_kwargs = {'sample': 'rslice', 'nlive': 500},
-                                         lensing_model = lm, fix_kernel_params=True, fix_mean_params=True)
+                                         lensing_model = lm, fix_mean_params=True)
     return sampler
 
 if not os.path.exists(args.savepath) or not os.path.exists(args.lcpath):
@@ -79,11 +80,11 @@ if not os.path.exists(args.savepath) or not os.path.exists(args.lcpath):
 
 snType = args.lcpath.split('/')[-3]
 massModel = args.lcpath.split('/')[-2]
-param_names = ['delta', 'beta0', 'beta1', 'r', 't0']
+param_names = ['A', 'tau', 'delta', 'beta0', 'beta1', 'r', 't0']
 
 try:
-    output_table = Table.read(args.savepath+'summary_table_'+snType+'_'+massModel+'_'+str(args.method)+'.dat', format='ascii')
-    output_dict = np.load(args.savepath+'summary_dict_'+snType+'_'+massModel+'_'+str(args.method)+'.npy', allow_pickle=True).item()
+    output_table = Table.read(args.savepath+'summary_table.dat', format='ascii')
+    output_dict = np.load(args.savepath+'summary_dict.npy', allow_pickle=True).item()
 except:
     output_table = Table(names=['snid', 'mass_model', 'delta', 'delta_err', 'beta', 'beta_err'],
                          dtype = ['str', 'str', 'float', 'float', 'float', 'float'])
@@ -121,7 +122,7 @@ for fn in os.listdir(args.lcpath):
         for i, pn in enumerate(param_names):
             output_dict[snid][pn] = mean[i]
             output_dict[snid][pn+'_err'] = np.sqrt(np.diag(cov))[i]
-        new_row = [snid, massModel, mean[0], np.sqrt(np.diag(cov))[0], mean[1], np.sqrt(np.diag(cov))[1]]
+        new_row = [snid, massModel, mean[2], np.sqrt(np.diag(cov))[2], mean[3], np.sqrt(np.diag(cov))[3]]
         
     elif args.method == 'emcee':
         flat_chains = sampler.get_chain(discard=500, flat=True)
@@ -132,10 +133,10 @@ for fn in os.listdir(args.lcpath):
             output_dict[snid][pn+'_err'] = np.std(flat_chains, axis=0)[i]
         new_row = [snid, massModel, np.mean(flat_chains, axis=0)[2], np.std(flat_chains, axis=0)[2], np.mean(flat_chains, axis=0)[3], np.std(flat_chains, axis=0)[3]]
 
-    np.save(args.savepath+'summary_dict_'+snType+'_'+massModel+'_'+str(args.method)+'.npy', output_dict)
+    np.save(args.savepath+'summary_dict.npy', output_dict)
 
     output_table.add_row(new_row)
-    output_table.write(args.savepath+'summary_table_'+snType+'_'+massModel+'_'+str(args.method)+'.dat', format='ascii', overwrite=True)
+    output_table.write(args.savepath+'summary_table.dat', format='ascii', overwrite=True)
 
     endtime = time.time()
     print(f'Done {snid} in {(endtime-starttime)/60} mins')
