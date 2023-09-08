@@ -3,9 +3,8 @@ import os
 import argparse
 import time
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import norm
-from astropy.io import ascii, fits
+from scipy.stats import norm, truncnorm
+from astropy.io import fits
 from astropy.table import Table, vstack
 from dynesty import utils as dyfunc
 import pickle
@@ -21,25 +20,32 @@ args = parser.parse_args()
 def run_gaussn(snid, data):
                                         
     print('Initializing GP')
-    meanfunc_params = [0]
-    meanfunc = meanfuncs.UniformMean(meanfunc_params)
-    kernel = kernels.ExpSquaredKernel([0.8, 30])
-    gp = gausSN.GP(kernel, meanfunc)
-
     image1 = data[data['image'] == 'image_1'].to_pandas().reset_index()
     image2 = data[data['image'] == 'image_2'].to_pandas().reset_index()
     peak_im1_loc = np.argmax(image1['flux'].rolling(3).mean())
     peak_im2_loc = np.argmax(image2['flux'].rolling(3).mean())
     init_delta = image2.loc[peak_im2_loc]['time'] - image1.loc[peak_im1_loc]['time']
     init_beta = image2.loc[peak_im2_loc]['flux'] / image1.loc[peak_im1_loc]['flux']
-    
-    lm = lensingmodels.SigmoidMicrolensing_LensingModel([init_delta, init_beta, init_beta, 0, np.mean(data['time'])])
+
+    meanfunc_params = [0]
+    meanfunc = meanfuncs.UniformMean(meanfunc_params)
+    kernel_params = [0.5, 25] + [init_delta, init_beta, init_beta, 0, np.mean(data['time'])]
+    kernel = kernels.SigmoidMLKernel(kernel_params)
+    gp = gausSN.GP(kernel, meanfunc)
+
+    loc = init_delta
+    scale = 50
+    left_trunc = np.min(image1['time']) - np.max(image2['time'])
+    right_trunc = np.max(image1['time']) - np.min(image2['time'])
+    a = (left_trunc-loc)/scale
+    b = (right_trunc-loc)/scale
 
     def ptform(u):
         prior = u
         prior[0] = (u[0] * 1)
         prior[1] = (u[1] * 10) + 20
-        prior[2] = (u[2] * 650) - 275
+        #prior[2] = (u[2] * 650) - 275
+        prior[2] = truncnorm.ppf(u[2], loc=loc, scale=scale, a=a, b=b)
         prior[3] = (u[3] * 52) + 0.1
         prior[4] = norm.ppf(u[4], loc=prior[3], scale=0.5)
         prior[5] = norm.ppf(u[5], loc=0, scale=0.5)
@@ -68,11 +74,10 @@ def run_gaussn(snid, data):
     print('Optimizing parameters')
     if args.method == 'emcee':
         sampler = gp.optimize_parameters(x = data['time'], y = data['flux'], yerr = data['fluxerr'], band = data['band'], image = data['image'],
-                                         method='emcee', logprior = log_prior, lensing_model = lm, fix_mean_params=True, fix_kernel_params=True)
+                                         method='emcee', logprior = log_prior, fix_mean_params=True)
     elif args.method == 'dynesty':
         sampler = gp.optimize_parameters(x = data['time'], y = data['flux'], yerr = data['fluxerr'], band = data['band'], image = data['image'],
-                                         method='dynesty', ptform=ptform, sampler_kwargs = {'sample': 'rslice', 'nlive': 500},
-                                         lensing_model = lm, fix_mean_params=True)
+                                         method='dynesty', ptform=ptform, sampler_kwargs = {'sample': 'rslice', 'nlive': 500}, fix_mean_params=True)
     return sampler
 
 if not os.path.exists(args.savepath) or not os.path.exists(args.lcpath):
