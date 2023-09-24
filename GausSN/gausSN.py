@@ -1,6 +1,7 @@
 import numpy as np
+import jax
 import jax.numpy as jnp
-from scipy.linalg import solve_triangular
+from jax.scipy.linalg import solve_triangular
 import matplotlib.pyplot as plt
 try:
     from scipy.optimize import minimize
@@ -18,6 +19,8 @@ try:
     import zeus
 except:
     pass
+
+jax.config.update('jax_enable_x64', True)
 
 class GP:
     """
@@ -132,7 +135,7 @@ class GP:
         
         # Compute the logarithm of the determinant of the covariance matrix
         L = jnp.linalg.cholesky(self.cov)
-        a = 2 * jnp.sum(jnp.diag(jnp.log(L)))
+        a = 2 * jnp.sum(jnp.log(jnp.diag(L)))
         
         # Compute the term in the exponential of the PDF of a MVN PDF
         z = solve_triangular(L, self.mean - y)
