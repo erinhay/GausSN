@@ -1,5 +1,6 @@
 import numpy as np
 import jax.numpy as jnp
+from scipy.linalg import solve_triangular
 import matplotlib.pyplot as plt
 try:
     from scipy.optimize import minimize
@@ -130,10 +131,12 @@ class GP:
         self.cov = jnp.dot(jnp.dot(magnification_matrix, K), magnification_matrix) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
-        sign, a = jnp.linalg.slogdet(2 * jnp.pi * self.cov)
+        L = jnp.linalg.cholesky(self.cov)
+        a = 2 * jnp.sum(jnp.diag(jnp.log(L)))
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        b = jnp.dot(jnp.transpose(self.mean - y), jnp.linalg.solve(self.cov, (self.mean - y)))
+        z = solve_triangular(L, self.mean - y)
+        b = jnp.linalg.norm(z)
         
         # Compute the log likelihood of a MVN PDF
         loglike = -0.5*(a + b)
@@ -144,6 +147,11 @@ class GP:
         """
         Compute the joint probability of the kernel, mean function, and/or lensing parameters (if applicable).
         """
+
+        # Compute the log prior for the given parameters
+        log_prior = logprior(params)
+        if jnp.isinf(log_prior) or jnp.isnan(log_prior):
+            return invert * -jnp.inf
         
         # Reset the lensing parameters, re-create the magnification matrix, and modify data as appropriate
         if lensing_model != None:
@@ -161,11 +169,6 @@ class GP:
         if not fix_mean_params:
             meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
             self.meanfunc.reset(meanfunc_params)
-        
-        # Compute the log prior for the given parameters
-        log_prior = logprior(params)
-        if jnp.isinf(log_prior) or jnp.isnan(log_prior):
-            return invert * -jnp.inf
  
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
