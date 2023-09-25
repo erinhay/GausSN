@@ -122,18 +122,19 @@ class GP:
         Compute the log likelihood of a multivariate normal PDF.
         """
         # Compute the mean vector for the given input data points x
-        self.mean = jnp.array(self.meanfunc.mean(x))
+        self.mean = self.meanfunc.mean(x)
+        mean_vector = self.mean - y
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
-        K = jnp.array(self.kernel.covariance(x, x))
-        self.cov = jnp.dot(jnp.dot(magnification_matrix, K), magnification_matrix) + jnp.diag(yerr**2)
+        K = self.kernel.covariance(x, x)
+        self.cov = (magnification_matrix @ K @ magnification_matrix) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
-        sign, a = jnp.linalg.slogdet(2 * jnp.pi * self.cov)
+        a = (len(x) * jnp.log(2 * jnp.pi)) + jnp.linalg.slogdet(self.cov)[1]
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        b = jnp.dot(jnp.transpose(self.mean - y), jnp.linalg.solve(self.cov, (self.mean - y)))
+        b = mean_vector.T @ jnp.linalg.solve(self.cov, mean_vector)
         
         # Compute the log likelihood of a MVN PDF
         loglike = -0.5*(a + b)
