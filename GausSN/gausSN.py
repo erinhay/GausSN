@@ -135,11 +135,11 @@ class GP:
         
         # Compute the logarithm of the determinant of the covariance matrix
         L = jnp.linalg.cholesky(self.cov)
-        a = 2 * jnp.sum(jnp.log(jnp.diag(L)))
+        a = (len(x) * jnp.log(2 * jnp.pi)) + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        z = solve_triangular(L, self.mean - y)
-        b = jnp.linalg.norm(z)
+        z = solve_triangular(L, self.mean - y, lower=True)
+        b = z.T @ z
         
         # Compute the log likelihood of a MVN PDF
         loglike = -0.5*(a + b)
