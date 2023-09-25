@@ -4,13 +4,18 @@ import jax.numpy as jnp
 
 jax.config.update('jax_enable_x64', True)
 
-class ExpSquaredKernel:
+class LensingKernel:
     """
     Moving kernel defined as A^2 * exp(-(y-y')^2 / (2*tau^2)).
     """
     def __init__(self, params):
         self.A = params[0]
         self.tau = params[1]
+        self.delta = params[2]
+        self.beta0 = params[3]
+        self.beta1 = params[4]
+        self.r = params[5]
+        self.t0 = params[6]
         self.ndim = len(params)
         self.scale = [0.5, 5]
 

@@ -1,5 +1,6 @@
 import numpy as np
 import jax
+from jax.scipy.linalg import solve_triangular
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 try:
@@ -131,13 +132,15 @@ class GP:
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
         K = self.kernel.covariance(x, x, kernel_params)
-        self.cov = jnp.dot(jnp.dot(magnification_matrix, K), magnification_matrix) + jnp.diag(yerr**2)
+        self.cov = (magnification_matrix @ K @ magnification_matrix) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
-        _, a = jnp.linalg.slogdet(2 * jnp.pi * self.cov)
+        L = jnp.linalg.cholesky(self.cov)
+        a = (len(x) * jnp.log(2 * jnp.pi)) + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        b = jnp.dot(jnp.transpose(self.mean - y), jnp.linalg.solve(self.cov, (self.mean - y)))
+        z = solve_triangular(L, self.mean - y, lower=True)
+        b = z.T @ z
         
         # Compute the log likelihood of a MVN PDF
         loglike = -0.5*(a + b)
