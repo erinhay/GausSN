@@ -12,7 +12,7 @@ class UniformMean:
         self.params = params
         
     def mean(self, y):
-        return jnp.repeat(self.c, len(y))
+        return self.c
 
 class Sin:
     def __init__(self, params):
