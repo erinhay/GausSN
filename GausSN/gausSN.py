@@ -176,11 +176,7 @@ class GP:
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
         # Therefore, we take the log likelihood of each band separately and sum them
-        loglike = 0
-        for pb in range(self.n_bands):
-            start = self.indices[self.n_images*pb]
-            stop = self.indices[self.n_images*(pb+1)]
-            loglike += self.loglikelihood(x[start : stop], self.y[start : stop], self.yerr[start : stop], self.magnification_matrix[start : stop, start : stop])
+        loglike = self.loglikelihood(x, self.y, self.yerr, self.magnification_matrix)
         loglike += log_prior
         
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
