@@ -1,6 +1,7 @@
 import numpy as np
 import jax
 import jax.numpy as jnp
+from jax.scipy.linalg import solve_triangular
 import matplotlib.pyplot as plt
 try:
     from scipy.optimize import minimize
@@ -93,6 +94,7 @@ class GP:
         
         self.indices = jnp.array(indices)
         self.repeats = jnp.max(self.indices[1:] - self.indices[:-1])
+        self.factor = self.repeats * jnp.log(2 * jnp.pi)
         
     def _get_initial_guess(self, params, fix_mean_params, fix_kernel_params, lensing_model):
         """
@@ -130,13 +132,15 @@ class GP:
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
-        self.cov = self.kernel.covariance(x, x, kernel_params) + jnp.diag(yerr**2)
+        self.cov = self.kernel.covariance(x, kernel_params=kernel_params) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
-        _, a = jnp.linalg.slogdet(2 * jnp.pi * self.cov)
+        L = jnp.linalg.cholesky(self.cov)
+        a = self.factor + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        b = jnp.dot(jnp.transpose(self.mean - y), jnp.linalg.solve(self.cov, (self.mean - y)))
+        z = solve_triangular(L, self.mean - y, lower=True)
+        b = z.T @ z
         
         # Compute the log likelihood of a MVN PDF
         loglike = -0.5*(a + b)
@@ -161,13 +165,13 @@ class GP:
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
         # Therefore, we take the log likelihood of each band separately and sum them
-        vmap_x = self.x.reshape((self.n_bands, self.repeats*self.n_images))
-        vmap_y = self.y.reshape((self.n_bands, self.repeats*self.n_images))
-        vmap_yerr = self.yerr.reshape((self.n_bands, self.repeats*self.n_images))
+        vmap_x = self.x.reshape((self.n_bands, self.n_images, self.repeats))
+        vmap_y = self.y.reshape((self.n_bands, self.n_images*self.repeats))
+        vmap_yerr = self.yerr.reshape((self.n_bands, self.n_images*self.repeats))
 
         vmap_jit_loglikelihood = jax.vmap(self.jit_loglikelihood, in_axes=(0, 0, 0, None, None))
         loglikes = vmap_jit_loglikelihood(vmap_x, vmap_y, vmap_yerr, self.mean_params, self.kernel_params)
-        loglike = np.sum(loglikes) + log_prior
+        loglike = jnp.sum(loglikes) + log_prior
         
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
         if jnp.isinf(loglike) or jnp.isnan(loglike):

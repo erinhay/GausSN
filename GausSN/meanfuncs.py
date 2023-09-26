@@ -15,7 +15,7 @@ class UniformMean:
             c = self.c
         else:
             c = mean_params[0]
-        return jnp.repeat(c, len(y))
+        return c
 
 class Sin:
     def __init__(self, params):
