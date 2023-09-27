@@ -129,7 +129,6 @@ class GP:
         """
         # Compute the mean vector for the given input data points x
         self.mean = self.meanfunc.mean(x, mean_params)
-        mean_vector = self.mean - y
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties

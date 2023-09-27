@@ -81,7 +81,7 @@ def run_gaussn(data):
 
 if not os.path.exists(args.lcpath):
     raise ValueError("Provided lcpath does not exist!")
-if not os.path.exists(args.savepath) or not os.path.exists(args.savepath+'chains/'):
+if not os.path.exists(args.savepath+'chains/'):
     os.makedirs(args.savepath+'chains/')
 
 snType = args.lcpath.split('/')[-3]
@@ -110,6 +110,7 @@ for fn in os.listdir(args.lcpath):
         data1 = Table(hdul[1].data)
         data2 = Table(hdul[2].data)
         data = vstack([data1, data2])
+        data.sort(['band', 'image', 'time'])
     except:
         print(f'Fail: {snid}')
         continue
