@@ -1,5 +1,6 @@
 import numpy as np
 import jax.numpy as jnp
+import jax
 
 class ConstantLensingKernel:
     def __init__(self, params):
@@ -9,6 +10,7 @@ class ConstantLensingKernel:
         self.betas = jnp.array([1] + params[3::2])
         self.params = params
         self.scale = [0.5, 5]
+        self.covariance = jax.jit(self._covariance)
     
     def _reset(self, params):
         self.A = params[0]
@@ -37,8 +39,8 @@ class ConstantLensingKernel:
         self.indices = indices
         self.repeats = self.indices[1:]-self.indices[:-1]
         self.mask = self._make_mask()
-        
-    def covariance(self, x, x_prime=None, params=None):
+
+    def _covariance(self, x, x_prime=None, params=None):
         if params != None:
             self._reset(params)
 
@@ -56,7 +58,7 @@ class ConstantLensingKernel:
             b_prime = b
 
         K = jnp.outer(b, b_prime) * self.A**2 * jnp.exp(-(x[:, None] - x_prime[None, :])**2/(2*self.tau**2))
-        return K*self.mask
+        return jnp.multiply(self.mask, K)
 
 class SigmoidLensingKernel:
     def __init__(self, params):
@@ -69,6 +71,7 @@ class SigmoidLensingKernel:
         self.t0s = jnp.array([0] + params[6::5])
         self.params = params
         self.scale = [0.5, 5]
+        self.covariance = jax.jit(self._covariance)
 
     def _reset(self, params):
         self.A = params[0]
@@ -102,7 +105,7 @@ class SigmoidLensingKernel:
         self.repeats = self.indices[1:]-self.indices[:-1]
         self.mask = self._make_mask()
         
-    def covariance(self, x, x_prime=None, params=None):
+    def _covariance(self, x, x_prime=None, params=None):
         if params != None:
             self._reset(params)
 
@@ -123,7 +126,7 @@ class SigmoidLensingKernel:
             b_prime = b
 
         K = jnp.outer(b, b_prime) * self.A**2 * jnp.exp(-(x[:, None] - x_prime[None, :])**2/(2*self.tau**2))
-        return K*self.mask
+        return jnp.multiply(self.mask, K)
 
 class ExpSquaredKernel:
     """

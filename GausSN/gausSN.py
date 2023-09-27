@@ -1,8 +1,7 @@
 import numpy as np
-import jax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve_triangular
-import matplotlib.pyplot as plt
+import jax
 try:
     from scipy.optimize import minimize
 except:
