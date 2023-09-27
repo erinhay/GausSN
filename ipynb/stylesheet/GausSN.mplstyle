@@ -1,4 +1,8 @@
 font.family : serif
+mathtext.default: regular
+axes.titlesize : 20
+axes.labelsize : 16
+
 xtick.alignment: center
 xtick.bottom: True
 xtick.color: black

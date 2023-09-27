@@ -4,29 +4,125 @@ import jax.numpy as jnp
 
 jax.config.update('jax_enable_x64', True)
 
-class LensingKernel:
+class ConstantLensingKernel:
     """
     Moving kernel defined as A^2 * exp(-(y-y')^2 / (2*tau^2)).
     """
     def __init__(self, params):
+        self.ndim = len(params)
         self.A = params[0]
         self.tau = params[1]
-        self.delta = params[2]
-        self.beta0 = params[3]
-        self.beta1 = params[4]
-        self.r = params[5]
-        self.t0 = params[6]
-        self.ndim = len(params)
-        self.scale = [0.5, 5]
+        self.deltas = jnp.array([0] + params[2::2])
+        self.betas = jnp.array([1] + params[3::2])
+        self.jit_time_shift = self._time_shift #jax.jit(self._time_shift)
+        self.jit_lens = self._lens #jax.jit(self._lens)
 
     def _reset(self, params):
         self.A = params[0]
         self.tau = params[1]
+        self.deltas = jnp.array([0] + params[2::2])
+        self.betas = jnp.array([1] + params[3::2])
+
+    def _make_mask(self):
+        self.mask = np.zeros((self.n_images, self.n_images*self.repeats))
+        for n in range(self.n_images):
+            start = self.repeats*n
+            stop = self.repeats*(n + 1)
+            self.mask[n, start : stop] = 1
+        self.mask = jnp.array(self.mask)
+
+    def _time_shift(self, x, delta):
+        return x - delta
+
+    def _lens(self, x, beta):
+        return jnp.repeat(beta, len(x))
+    
+    def import_from_gp(self, n_images, n_bands, repeats):
+        self.n_images = n_images
+        self.n_bands = n_bands
+        self.repeats = repeats
+        self._make_mask()
+        self.scale = [0.5, 5] + [5, 0.5]*(self.n_images-1)
         
-    def covariance(self, y, y_prime, kernel_params=None):
+    def covariance(self, x, x_prime, kernel_params=None):
         if kernel_params is not None:
             self._reset(kernel_params)
-        K = self.A**2 * jnp.exp(-(y[:, None] - y_prime[None, :])**2/(2*self.tau**2)) #(beta[:, None] * beta_prime[None, :]) * 
+        
+        vmap_time_shift = jax.vmap(self.jit_time_shift, in_axes = (None, 0))
+        vmap_lens = jax.vmap(self.jit_lens, in_axes = (None, 0))
+
+        x = vmap_time_shift(x, self.deltas)
+        x = np.sum(x*self.mask, axis=0)
+        x_prime = vmap_time_shift(x, self.deltas)
+        x_prime = np.sum(x_prime*self.mask, axis=0)
+
+        beta = vmap_lens(x, self.betas)
+        beta = np.sum(beta*self.mask, axis=0)
+        beta_prime = vmap_lens(x_prime, self.betas)
+        beta_prime = np.sum(beta_prime*self.mask, axis=0)
+
+        K = (beta.T @ beta_prime) * self.A**2 * jnp.exp(-(x[:, None] - x_prime[None, :])**2/(2*self.tau**2))
+        return K
+
+class SigmoidLensingKernel:
+    """
+    Moving kernel defined as A^2 * exp(-(y-y')^2 / (2*tau^2)).
+    """
+    def __init__(self, params):
+        self.ndim = len(params)
+        self.A = params[0]
+        self.tau = params[1]
+        self.deltas = jnp.array([0] + params[2::5])
+        self.beta0s = jnp.array([1] + params[3::5])
+        self.beta1s = jnp.array([1] + params[4::5])
+        self.rs = jnp.array([0] + params[5::5])
+        self.t0s = jnp.array([0] + params[6::5])
+
+        self.jit_time_shift = jax.jit(self._time_shift)
+        self.jit_lens = jax.jit(self._lens)
+        self.vmap_time_shift = jax.vmap(self.jit_time_shift)
+        self.vmap_lens = jax.vmap(self.jit_lens)
+
+    def _reset(self, params):
+        self.A = params[0]
+        self.tau = params[1]
+        self.deltas = jnp.array([0] + params[2::5])
+        self.beta0s = jnp.array([1] + params[3::5])
+        self.beta1s = jnp.array([1] + params[4::5])
+        self.rs = jnp.array([0] + params[5::5])
+        self.t0s = jnp.array([0] + params[6::5])
+
+    def _time_shift(self, x, delta):
+        return x - delta
+
+    def _lens(self, x, beta0, beta1, r, t0):
+        denom = 1 + jnp.exp(-r * (x - t0))
+        return beta0 + (beta1/denom)
+    
+    def import_from_gp(self, n_images, n_bands, repeats):
+        self.n_images = n_images
+        self.n_bands = n_bands
+        self.repeats = repeats
+        self.scale = [0.5, 5] + [5, 0.5, 0.5, 0.5, 10]*(self.n_images-1)
+        
+    def covariance(self, x, x_prime=None, kernel_params=None):
+        if kernel_params is not None:
+            self._reset(kernel_params)
+
+        x = self.vmap_time_shift(x, self.deltas)
+        beta = self.vmap_lens(x, self.beta0s, self.beta1s, self.rs, self.t0s).flatten()
+
+        new_x = x.flatten()
+        new_x_prime = new_x
+        beta_prime = beta
+
+        if x_prime != None:
+            x_prime = self.vmap_time_shift(x_prime, self.deltas)
+            beta_prime = self.vmap_lens(x_prime, self.beta0s, self.beta1s, self.rs, self.t0s).flatten()
+
+            new_x_prime = x_prime.flatten()
+        
+        K = jnp.outer(beta, beta_prime) * self.A**2 * jnp.exp(-(new_x[:, None] - new_x_prime[None, :])**2/(2*self.tau**2))
         return K
 
 class ExpSquaredKernel:

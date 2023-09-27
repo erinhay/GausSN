@@ -4,13 +4,13 @@ import argparse
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import norm
-from astropy.io import ascii, fits
+from scipy.stats import norm, truncnorm
+from astropy.io import fits
 from astropy.table import Table, vstack
 from dynesty import utils as dyfunc
 import pickle
 
-from GausSN import gausSN, kernels, meanfuncs, lensingmodels
+from GausSN import gausSN, kernels, meanfuncs
 
 parser = argparse.ArgumentParser(description="GausSN Strongly Lensed Supernovae Light Curve Fitting Pipeline")
 parser.add_argument("--method", default='dynesty', help="Sampling method. Choice of 'dynesty' or 'emcee'. Defaults to 'dynesty'.")
@@ -18,35 +18,40 @@ parser.add_argument("lcpath", help="Path to folder with glSNe light curve files.
 parser.add_argument("savepath", help="Path to a folder where output files will be saved.")
 args = parser.parse_args()
 
-def run_gaussn(snid, data):
+def run_gaussn(data):
 
     print('Initializing GP')
-    meanfunc_params = [0]
-    meanfunc = meanfuncs.UniformMean(meanfunc_params)
-    kernel = kernels.ExpSquaredKernel([0.35, 30])
-    gp = gausSN.GP(kernel, meanfunc)
-
-    image1 = data[data['image'] == 'image_1'].to_pandas().reset_index()
-    image2 = data[data['image'] == 'image_2'].to_pandas().reset_index()
+    image1 = data[data['image'] == 'image_1'].to_pandas().reset_index(drop=True)
+    image2 = data[data['image'] == 'image_2'].to_pandas().reset_index(drop=True)
     peak_im1_loc = np.argmax(image1['flux'].rolling(3).mean())
     peak_im2_loc = np.argmax(image2['flux'].rolling(3).mean())
     init_delta = image2.loc[peak_im2_loc]['time'] - image1.loc[peak_im1_loc]['time']
     init_beta = image2.loc[peak_im2_loc]['flux'] / image1.loc[peak_im1_loc]['flux']
 
-    lm = lensingmodels.SigmoidMicrolensing_LensingModel([init_delta, init_beta, init_beta, 0, np.mean(data['time'])])
+    meanfunc = meanfuncs.UniformMean([0])
+    kernel = kernels.SigmoidMLKernel([0.35, 30, init_delta, init_beta, 0, 0., np.mean(data['time'])])
+    gp = gausSN.GP(kernel, meanfunc)
+
+    scale_delta = 50
+    left_trunc = np.min(image1['time']) - np.max(image2['time'])
+    right_trunc = np.max(image1['time']) - np.min(image2['time'])
+    a_delta = (left_trunc-init_delta)/scale_delta
+    b_delta = (right_trunc-init_delta)/scale_delta
+    scale_beta = 10
+    a_beta = (0-init_beta)/scale_beta
 
     def ptform(u):
         prior = u
-        prior[0] = (u[0] * 1)
+        prior[0] = (u[0] * 2)
         prior[1] = (u[1] * 10) + 20
-        prior[2] = (u[2] * 650) - 275
-        prior[3] = (u[3] * 52) + 0.1
-        prior[4] = norm.ppf(u[4], loc=prior[3], scale=0.5)
+        prior[2] = truncnorm.ppf(u[2], loc=init_delta, scale=scale_delta, a=a_delta, b=b_delta)
+        prior[3] = truncnorm.ppf(u[3], loc=init_beta, scale=scale_beta, a=a_beta, b=np.inf)
+        prior[4] = norm.ppf(u[4], loc=0, scale=0.5)
         prior[5] = norm.ppf(u[5], loc=0, scale=0.5)
 
-        delta_vector = np.repeat(np.tile([0, prior[2]], gp.n_bands), gp.indices[1:]-gp.indices[:-1])
-        shifted_time = data['time'] - delta_vector
-
+        delta_vector = np.repeat(np.tile([0, prior[2]], gp.n_bands), gp.repeats)
+        shifted_time = gp.x - delta_vector
+        
         prior[6] = (u[6] * (np.max(shifted_time) - np.min(shifted_time))) + np.min(shifted_time)
 
         return(prior)
@@ -68,15 +73,16 @@ def run_gaussn(snid, data):
     print('Optimizing parameters')
     if args.method == 'emcee':
         sampler = gp.optimize_parameters(x = data['time'], y = data['flux'], yerr = data['fluxerr'], band = data['band'], image = data['image'],
-                                         method='emcee', logprior = log_prior, lensing_model = lm, fix_mean_params=True, fix_kernel_params=True)
+                                         method='emcee', logprior = log_prior, fix_mean_params=True, fix_kernel_params=True)
     elif args.method == 'dynesty':
         sampler = gp.optimize_parameters(x = data['time'], y = data['flux'], yerr = data['fluxerr'], band = data['band'], image = data['image'],
-                                         method='dynesty', ptform=ptform, sampler_kwargs = {'sample': 'rslice', 'nlive': 500},
-                                         lensing_model = lm, fix_mean_params=True)
+                                         method='dynesty', ptform=ptform, sampler_kwargs = {'sample': 'rslice'}, fix_mean_params=True)
     return sampler
 
-if not os.path.exists(args.savepath) or not os.path.exists(args.lcpath):
-    raise ValueError("Provided savepath and/or lcpath does not exist!")
+if not os.path.exists(args.lcpath):
+    raise ValueError("Provided lcpath does not exist!")
+if not os.path.exists(args.savepath+'chains/'):
+    os.makedirs(args.savepath+'chains/')
 
 snType = args.lcpath.split('/')[-3]
 massModel = args.lcpath.split('/')[-2]
@@ -104,12 +110,13 @@ for fn in os.listdir(args.lcpath):
         data1 = Table(hdul[1].data)
         data2 = Table(hdul[2].data)
         data = vstack([data1, data2])
+        data.sort(['band', 'image', 'time'])
     except:
         print(f'Fail: {snid}')
         continue
 
     try:
-        sampler = run_gaussn(snid, data)
+        sampler = run_gaussn(data)
     except:
         print(f'Fail: {snid}')
         continue
@@ -131,7 +138,9 @@ for fn in os.listdir(args.lcpath):
         for i, pn in enumerate(param_names):
             output_dict[snid][pn] = np.mean(flat_chains, axis=0)[i]
             output_dict[snid][pn+'_err'] = np.std(flat_chains, axis=0)[i]
-        new_row = [snid, massModel, np.mean(flat_chains, axis=0)[2], np.std(flat_chains, axis=0)[2], np.mean(flat_chains, axis=0)[3], np.std(flat_chains, axis=0)[3]]
+        mean_chains = np.mean(flat_chains, axis=0)
+        std_chains = np.std(flat_chains, axis=0)
+        new_row = [snid, massModel, mean_chains[2], std_chains[2], mean_chains[3], std_chains[3]]
 
     np.save(args.savepath+'summary_dict.npy', output_dict)
 
