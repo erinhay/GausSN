@@ -33,15 +33,15 @@ class GP:
     Methods:
         __init__(self, kernel, meanfunc): Initialize the GP with a kernel and mean function.
         
-        _get_initial_guess(self, fix_mean_params, fix_kernel_params, lensing_model): 
+        _get_initial_guess(self, fix_mean_params, fix_kernel_params): 
         
         logprior(self, params): Default uninformative prior for MCMC sampling methods.
         
         loglikelihood(self, x, y, yerr, log_prior, magnification_matrix=1): Compute the log likelihood of the GP model.
         
-        jointprobability(self, params, logprior=None, lensing_model=None, fix_mean_params=False, fix_kernel_params=False, invert=False): Compute the joint probability of kernel, mean function, and lensing model parameters.
+        jointprobability(self, params, logprior=None, fix_mean_params=False, fix_kernel_params=False, invert=False): Compute the joint probability of kernel and mean function parameters.
         
-        optimize_parameters(self, x, y, yerr, n_bands=1, method='minimize', loglikelihood=None, logprior=None, ptform=None, lensing_model=None, fix_mean_params=False, fix_kernel_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None): Optimize GP parameters using different methods (minimize, emcee, zeus, dynesty).
+        optimize_parameters(self, x, y, yerr, n_bands=1, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_mean_params=False, fix_kernel_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None): Optimize GP parameters using different methods (minimize, emcee, zeus, dynesty).
         
         predict(self, x_prime, x, y, yerr): Predict function values at new locations given observed data.
         
@@ -66,6 +66,7 @@ class GP:
         """
         self.kernel = kernel
         self.meanfunc = meanfunc
+        self.jit_loglikelihood = jax.jit(self.loglikelihood)
         
     def _prepare_indices(self, x, band, image):
         # Store n_bands/images information
@@ -92,11 +93,10 @@ class GP:
                 indices.append(len(x) + indices[-1])
         
         self.indices = jnp.array(indices)
-        self.repeats = jnp.max(self.indices[1:] - self.indices[:-1])
         
-    def _get_initial_guess(self, fix_mean_params, fix_kernel_params, lensing_model):
+    def _get_initial_guess(self, fix_mean_params, fix_kernel_params):
         """
-        Put together the vector (init_guess) of parameters which the mean function, kernel, and/or lensing model (if applicable) are initialized with at the starting location for the optimization/sampling process. The parameters of the kernel are stacked first, followed by the mean function parameters, and finally the lensing parameters. For MCMC sampling, there will be some scatter enforced around the initial vector values. To set the scale of this scatter, an init_guess_scale vector is also compiled.
+        Put together the vector (init_guess) of parameters which the mean function and kernel are initialized with at the starting location for the optimization/sampling process. The parameters of the kernel are stacked first, followed by the mean function parameters. For MCMC sampling, there will be some scatter enforced around the initial vector values. To set the scale of this scatter, an init_guess_scale vector is also compiled.
         """
         init_guess = []
         init_guess_scale = []
@@ -106,14 +106,20 @@ class GP:
         if not fix_mean_params:
             init_guess.extend(self.meanfunc.params)
             init_guess_scale.extend(self.meanfunc.scale)
-        if lensing_model:
-            init_guess.extend(lensing_model.lensing_params)
-            init_guess_scale.extend(lensing_model.scale)
             
         if len(init_guess) < 0.5:
-                raise Exception("No parameters to fit. Check fix_mean_params, fix_kernel_params, and lensing model to make sure there are parameters to fit.")
+                raise Exception("No parameters to fit. Check fix_mean_params and fix_kernel_params to make sure there are parameters to fit.")
 
         return init_guess, init_guess_scale
+
+    def _rescale_data(self, y, yerr):
+        """
+        Rescale the y data and their errors so it spans only 1 unit.
+        """
+        factor = jnp.max(y) - jnp.min(y)
+        y_rescaled = y/factor
+        yerr_rescaled = yerr/factor
+        return y_rescaled, yerr_rescaled
     
     def logprior(self, params):
         """
@@ -121,17 +127,16 @@ class GP:
         """
         return 0
     
-    def loglikelihood(self, x, y, yerr, magnification_matrix=1):
+    def loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params):
         """
         Compute the log likelihood of a multivariate normal PDF.
         """
         # Compute the mean vector for the given input data points x
-        self.mean = self.meanfunc.mean(x)
+        self.mean = self.meanfunc.mean(x, params=meanfunc_params)
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
-        K = self.kernel.covariance(x, x)
-        self.cov = (magnification_matrix @ K @ magnification_matrix) + jnp.diag(yerr**2)
+        self.cov = self.kernel.covariance(x, params=kernel_params) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
         L = jnp.linalg.cholesky(self.cov)
@@ -146,9 +151,9 @@ class GP:
         
         return loglike
         
-    def jointprobability(self, params, logprior = None, lensing_model = None, fix_mean_params = False, fix_kernel_params = False, invert=1):
+    def jointprobability(self, params, logprior = None, fix_mean_params = False, fix_kernel_params = False, invert=1):
         """
-        Compute the joint probability of the kernel, mean function, and/or lensing parameters (if applicable).
+        Compute the joint probability of the kernel and mean function parameters (if applicable).
         """
 
         # Compute the log prior for the given parameters
@@ -156,31 +161,18 @@ class GP:
         if jnp.isinf(log_prior) or jnp.isnan(log_prior):
             return invert * -jnp.inf
         
-        # Reset the lensing parameters, re-create the magnification matrix, and modify data as appropriate
-        if lensing_model != None:
-            lensing_params = [params[i+self.ndim-len(lensing_model.lensing_params)] for i in range(len(lensing_model.lensing_params))]
-            lensing_model.reset(lensing_params)
-            x = lensing_model.time_shift(self.x)
-            self.magnification_matrix = lensing_model.magnification_matrix(x)
-        else:
-            x = self.x    
-        
         # Reset the kernel and/or mean function parameters
+        kernel_params = None
         if not fix_kernel_params:
             kernel_params = [params[i] for i in range(len(self.kernel.params))]
-            self.kernel.reset(kernel_params)
+        meanfunc_params = None
         if not fix_mean_params:
             meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
-            self.meanfunc.reset(meanfunc_params)
  
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
         # Therefore, we take the log likelihood of each band separately and sum them
-        loglike = 0
-        for pb in range(self.n_bands):
-            start = self.indices[self.n_images*pb]
-            stop = self.indices[self.n_images*(pb+1)]
-            loglike += self.loglikelihood(x[start : stop], self.y[start : stop], self.yerr[start : stop], self.magnification_matrix[start : stop, start : stop])
+        loglike = self.jit_loglikelihood(self.x, self.y, self.yerr, kernel_params, meanfunc_params)
         loglike += log_prior
         
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
@@ -189,7 +181,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, lensing_model=None, fix_mean_params = False, fix_kernel_params = False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
+    def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_mean_params = False, fix_kernel_params = False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
@@ -216,9 +208,6 @@ class GP:
 
         :param ptform: function, optional (default=None)
             Function to transform the prior for the dynesty nested sampling process.
-
-        :param lensing_model: object, optional (default=None)
-            A lensing model object (if applicable) for the GP model.
 
         :param fix_mean_params: bool, optional (default=False)
             Whether to fix the parameters of the mean function during optimization/sampling. By default, the mean function parameters are fit for.
@@ -252,11 +241,14 @@ class GP:
             
         # Convert data numpy arrays to jax arrays for faster computing later on
         self.x = jnp.array(x)
-        self.y = jnp.array(y)
-        self.yerr = jnp.array(yerr)
+        self.y, self.yerr = self._rescale_data(jnp.array(y), jnp.array(yerr))
         
         # Store n_bands, n_images, and indices information
         self._prepare_indices(self.x, band, image)
+        try:
+            self.kernel.import_from_gp(self.n_bands, self.n_images, self.indices)
+        except:
+            pass
         
         # Determine the number of dimensions for optimization/sampling
         self.ndim = 0
@@ -265,12 +257,6 @@ class GP:
         if not fix_kernel_params:
             self.ndim += len(self.kernel.params)
         
-        if lensing_model != None:
-            self.ndim += len(lensing_model.lensing_params)
-            self.y, self.yerr = lensing_model.rescale_data(self.y, self.yerr)
-            # Pass necessary index, image, and band info to lensing model class
-            lensing_model._import_from_gp(self.n_images, self.n_bands, self.indices)
-        
         # Set the loglikelihood/logprior to the default multi-variate normal likelihood specified within the GP class function, if not otherwise specified
         if loglikelihood == None:
             loglikelihood = self.loglikelihood
@@ -278,18 +264,15 @@ class GP:
             logprior = self.logprior
             
         # Compute mean and covariance given the specified mean function and kernel with their initial parameters
-        self.mean = jnp.array(self.meanfunc.mean(self.x))
-        self.cov = jnp.array(self.kernel.covariance(self.x, self.x))
-        
-        # Set placeholder in case of no lensing model
-        self.magnification_matrix = np.eye(self.cov.shape[0])
+        self.mean = self.meanfunc.mean(self.x)
+        self.cov = self.kernel.covariance(self.x)
         
         if method == 'dynesty':
                 
             nlive = sampler_kwargs.pop('nlive', 500)
             sample = sampler_kwargs.pop('sample', 'rslice')
            
-            sampler = dynesty.NestedSampler(self.jointprobability, ptform, self.ndim, logl_args = (logprior, lensing_model, fix_mean_params, fix_kernel_params), nlive = nlive, sample = sample, **sampler_kwargs)
+            sampler = dynesty.NestedSampler(self.jointprobability, ptform, self.ndim, logl_args = (logprior, fix_mean_params, fix_kernel_params), nlive = nlive, sample = sample, **sampler_kwargs)
             
             sampler.run_nested(**run_sampler_kwargs)
             return sampler
@@ -297,14 +280,14 @@ class GP:
         if method == 'emcee' or method == 'zeus' or method == 'minimize':
         
             # Get vector of initial parameters, which is required for optmizing/sampling with the minimize, emcee, and zeus methods
-            init_guess, init_guess_scale = self._get_initial_guess(fix_mean_params, fix_kernel_params, lensing_model)
+            init_guess, init_guess_scale = self._get_initial_guess(fix_mean_params, fix_kernel_params)
 
             if method == 'minimize': 
-                results = minimize(self.jointprobability, init_guess, args = (logprior, lensing_model, fix_mean_params, fix_kernel_params, -1), **minimize_kwargs)
+                results = minimize(self.jointprobability, init_guess, args = (logprior, fix_mean_params, fix_kernel_params, -1), **minimize_kwargs)
                 return results
 
             if np.isinf(np.any(logprior(init_guess))):
-                raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel, mean function, and lensing model (if applicable) were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
+                raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel and mean function were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
                 
             # Initialize walkers with random initial positions around the initial guess
             p0 = np.random.normal(init_guess, init_guess_scale, size=(nwalkers, self.ndim))
@@ -317,10 +300,10 @@ class GP:
 
             
             if method == 'emcee':
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (logprior, lensing_model, fix_mean_params, fix_kernel_params, False), **sampler_kwargs)
+                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (logprior, fix_mean_params, fix_kernel_params, False), **sampler_kwargs)
 
             if method == 'zeus':
-                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[logprior, lensing_model, fix_mean_params, fix_kernel_params, False], **sampler_kwargs)
+                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[logprior, fix_mean_params, fix_kernel_params, False], **sampler_kwargs)
 
                 
             # Run the sampler
