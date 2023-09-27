@@ -92,6 +92,7 @@ class GP:
                 indices.append(len(x) + indices[-1])
         
         self.indices = jnp.array(indices)
+        self.factor = (len(x) * jnp.log(2 * jnp.pi))
         
     def _get_initial_guess(self, fix_mean_params, fix_kernel_params):
         """
@@ -139,7 +140,7 @@ class GP:
         
         # Compute the logarithm of the determinant of the covariance matrix
         L = jnp.linalg.cholesky(self.cov)
-        a = (len(x) * jnp.log(2 * jnp.pi)) + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
+        a = self.factor + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
         # Compute the term in the exponential of the PDF of a MVN PDF
         z = solve_triangular(L, self.mean - y, lower=True)
