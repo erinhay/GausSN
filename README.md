@@ -1,5 +1,8 @@
-# GausSN
+# GausSN: Bayesian Time Delay Estimation for Strongly Lensed Supernovae
 
-Welcome to GausSN – a package for fitting astronomical light curve data using Gaussian Processes. This package was developed by Erin Hayes (@erinhay), with assistence from Dr. Stephen Thorp (@stevet40). Thanks also to Ben Boyd (@benboyd97) for helpful discussion and Christian Kirkham (@astrochristian) for testing the code.
+Welcome to GausSN – a semi-parametric Gaussian Process model for time delay estimation with resolved systems of gravitationally lensed supernovae (glSNe). For an introduction to how to use GausSN, see the getting_started.ipynb notebook in the ipynb folder!
 
-For an introduction to how to use GausSN, see the getting_started.ipynb notebook in the ipynb folder!
+If you make use of this code, please cite:
+
+- Hayes, E.E., ... (in prep)
+
