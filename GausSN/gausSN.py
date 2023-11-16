@@ -322,9 +322,9 @@ class GP:
         y = observed data, y
         """
         
-        cov_UV = self.kernel.covariance(x_prime, x)
-        cov_VV = self.kernel.covariance(x, x) + np.diag(yerr**2)
-        cov_UU = self.kernel.covariance(x_prime, x_prime)
+        cov_UV = self.kernel.covariance(x_prime, x_prime=x)
+        cov_VV = self.kernel.covariance(x) + np.diag(yerr**2)
+        cov_UU = self.kernel.covariance(x_prime)
 
         mu_U = self.meanfunc.mean(x_prime)
         mu_V = self.meanfunc.mean(x)
