@@ -1,5 +1,6 @@
 import numpy as np
 import jax.numpy as jnp
+import sncosmo
 
 class UniformMean:
     def __init__(self, params):
@@ -11,10 +12,104 @@ class UniformMean:
         self.c = params[0]
         self.params = params
         
-    def mean(self, y, params=None):
+    def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
         return self.c
+
+class sncosmoMean:
+    def __init__(self, templatename, params, redshift=None):
+        self.templatename = templatename
+        self.params = params
+        if len(params) > 2:
+            self.redshift = params[0]
+            self.t0 = params[1]
+            self.amp = params[2]
+        else:
+            self.redshift = redshift
+            self.t0 = params[0]
+            self.amp = params[1]
+        self.model = sncosmo.Model(source=self.templatename)
+        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-7*self.amp)
+
+    def _reset(self, params):
+        self.params = params
+        if len(params) > 2:
+            self.redshift = params[0]
+            self.t0 = params[1]
+            self.amp = params[2]
+        else:
+            self.t0 = params[0]
+            self.amp = params[1]
+        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-7*self.amp)
+
+    def mean(self, x, params=None, bands=None):
+        if params != None:
+            self._reset(params)
+
+        args = np.argsort(x)
+        revert_args = np.zeros(len(args), dtype=int)
+        revert_args[args] = np.arange(len(args))
+
+        reordered_x = x[args]
+        if len(bands) >= 2:
+            reordered_bands = bands[args]
+        else:
+            reordered_bands = bands
+
+        flux = self.model.bandflux(reordered_bands, reordered_x)
+        return flux[revert_args]
+
+class SALTMean:
+    def __init__(self, templatename, params, redshift=None):
+        self.templatename = templatename
+        self.params = params
+        if len(params) > 4:
+            self.redshift = params[0]
+            self.t0 = params[1]
+            self.x0 = params[2]
+            self.x1 = params[3]
+            self.c = params[4]
+        else:
+            self.redshift = redshift
+            self.t0 = params[0]
+            self.x0 = params[1]
+            self.x1 = params[2]
+            self.c = params[3]
+        self.model = sncosmo.Model(source=self.templatename)
+        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
+
+    def _reset(self, params):
+        self.params = params
+        if len(params) > 4:
+            self.redshift = params[0]
+            self.t0 = params[1]
+            self.x0 = params[2]
+            self.x1 = params[3]
+            self.c = params[4]
+        else:
+            self.t0 = params[0]
+            self.x0 = params[1]
+            self.x1 = params[2]
+            self.c = params[3]
+        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
+
+    def mean(self, x, params=None, bands=None):
+        if params != None:
+            self._reset(params)
+
+        args = np.argsort(x)
+        revert_args = np.zeros(len(args), dtype=int)
+        revert_args[args] = np.arange(len(args))
+
+        reordered_x = x[args]
+        if len(bands) >= 2:
+            reordered_bands = bands[args]
+        else:
+            reordered_bands = bands
+
+        flux = self.model.bandflux(reordered_bands, reordered_x)
+        return flux[revert_args]
 
 class Sin:
     def __init__(self, params):
@@ -30,7 +125,7 @@ class Sin:
         self.phi = params[2]
         self.params = params
         
-    def mean(self, y, params=None):
+    def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
         return self.A * np.sin((y*self.w) + self.phi)
@@ -49,7 +144,7 @@ class Gaussian:
         self.sigma = params[2]
         self.params = params
         
-    def mean(self, y, params=None):
+    def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
         exponent = -(y - self.mu)**2 / (2 * self.sigma**2)
@@ -76,7 +171,7 @@ class Bazin2009:
         self.Trise = params[4]
         self.params = params
     
-    def mean(self, y, params=None):
+    def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
         mu = np.zeros([len(y)])
@@ -111,7 +206,7 @@ class Karpenka2012:
         self.Trise = params[5]
         self.params = params
     
-    def mean(self, y, params=None):
+    def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
         mu = np.zeros([len(y)])
@@ -146,7 +241,7 @@ class Villar2019:
         self.Trise = params[5]
         self.params = params
         
-    def mean(self, y, params=None):
+    def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
         mu = np.zeros([len(y)])
@@ -174,7 +269,7 @@ class ExpFunction:
         self.params = params
         self.scale = [0.25, 5]
         
-    def mean(self, y, params=None):
+    def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
         mu = np.zeros([len(y)])
@@ -202,7 +297,7 @@ class QuarticFunction:
         self.e = params[4]
         self.params = params
         
-    def mean(self, y, params=None):
+    def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
         mu = a*(y**4) + b*(y**3) + c*(y**2) + d*y + e
