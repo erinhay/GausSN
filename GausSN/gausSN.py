@@ -342,7 +342,7 @@ class GP:
             sampler.run_mcmc(p0, nsteps=nsteps, **run_sampler_kwargs)
             return sampler
     
-    def predict(self, x_prime, x, y, yerr, bands=None):
+    def predict(self, x_prime, x, y, yerr, band):
         """
         For a set of observations, y, with measurement uncertainties, yerr, observed at x, give the function values at x_prime.
         
@@ -352,20 +352,19 @@ class GP:
         x_prime = desired x locations of data
         x = observed data, x
         y = observed data, y
+
+        ONLY FOR ONE BAND!!!!!!!
         """
         
-        K_UV = self.kernel.covariance(x_prime, x_prime=x)
-        cov_UV = K_UV
+        cov_UV = self.kernel.covariance(x_prime, x_prime=x)
 
-        shifted_x, b_matrix_VV = self.lensingmodel.lens(x)
-        K_VV = b_matrix_VV * self.kernel.covariance(shifted_x)
-        cov_VV = jnp.multiply(self.lensingmodel.mask, K_VV) + np.diagflat(yerr**2)
+        K_VV = self.kernel.covariance(x)
+        cov_VV = K_VV + np.diagflat(yerr**2)
 
-        K_UU = self.kernel.covariance(x_prime)
-        cov_UU = K_UU
+        cov_UU = self.kernel.covariance(x_prime)
 
-        mu_U = self.meanfunc.mean(x_prime, bands=bands)
-        mu_V = self.meanfunc.mean(shifted_x, bands=bands)
+        mu_U = self.meanfunc.mean(x_prime, bands=band)
+        mu_V = self.meanfunc.mean(x, bands=band)
         
         expectation = mu_U + (cov_UV @ np.linalg.solve(cov_VV, y-mu_V))
         variance = cov_UU - (cov_UV @ np.linalg.solve(cov_VV, np.transpose(cov_UV)))

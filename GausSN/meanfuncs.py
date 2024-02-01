@@ -30,7 +30,7 @@ class sncosmoMean:
             self.t0 = params[0]
             self.amp = params[1]
         self.model = sncosmo.Model(source=self.templatename)
-        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-7*self.amp)
+        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
 
     def _reset(self, params):
         self.params = params
@@ -41,7 +41,7 @@ class sncosmoMean:
         else:
             self.t0 = params[0]
             self.amp = params[1]
-        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-7*self.amp)
+        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
 
     def mean(self, x, params=None, bands=None):
         if params != None:
