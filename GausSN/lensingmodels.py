@@ -59,24 +59,42 @@ class ConstantLensing:
 
     def lensed_mean_covariance(self, x, yerr, kernel_params=None, meanfunc_params=None, lensing_params=None):
 
+        #Create empty arrays which will contain the mean function, mean_vector, and the covariance matrix, K (which will later become cov_matrix).
         mean_vector = np.zeros(len(x))
         K = np.zeros((len(x), len(x)))
 
+        #Reset lensing params if necessary.
         if lensing_params != None:
             self._reset(lensing_params)
 
+        #Make a vector of deltas/betas that encodes the image information. The delta/beta for each image are repeated a number of times
+        #corresponding to the number of observations of an image. ( len(self.deltas) = # of images )
+        # NOTE: This is a temporary solution, which only works for N images + unresolved data in 1 band. "repeats" is a list: [# of observations
+        # for image 1, # of observations for image 2, # of observations of unresolved data]. 
+        # After making the delta/beta_vector for the resolved data ( jnp.repeat(jnp.tile(...), ...) ), I concatenate a bunch of 0s to the
+        # delta/beta_vector. While this part of the vector will NOT be used (because the mean function/covariance for unresolved data depends
+        # on all images, so I have to loop over each delta/beta for those elements), it is probably best to have delta/beta_vector be the same
+        # length as x (especially when you get to more bands and you will need to pad delta_vector between resolved data to get the right indices
+        # when you're accessing different bands).
         delta_vector = jnp.concatenate([jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats[:-1]), jnp.repeat(0, self.repeats[-1])])
         beta_vector = jnp.concatenate([jnp.repeat(jnp.tile(self.betas, self.n_bands), self.repeats[:-1]), jnp.repeat(0, self.repeats[-1])])
 
+        #Loop over the time data, x
         for i in range(len(x)):
 
+            #For each time, x[i], get the time shifted time, x_i. The entry is shifted back by delta_vector[i], where delta_vector[i] is
+            #specific to the image that the data point corresponds to.
+            #Repeat the same process for getting the magnification factor, b_i, for time x[i] based on the image info,
+            #which is encoded in beta_vector[i].
             x_i = self._time_shift(x[i], delta_vector[i])
             b_i = self._magnify(x_i, beta_vector[i])
 
+            #If the data is resolved, the mean vector is just equal to one evaluation of the mean function at time x_i in band bands[i]
+            #which is magnified by b_i.
             if 'image' in self.images[i]:
-
                 mean_vector[i] = b_i * self.meanfunc.mean(x_i, params=meanfunc_params, bands=[self.bands[i]])
 
+            #If the data is resolved, you have to loop over all images to get the contribution to the mean from each image.
             elif self.images[i] == 'unresolved':
                 for n in range(self.n_images):
                     x_i = self._time_shift(x[i], self.deltas[n])
@@ -84,14 +102,17 @@ class ConstantLensing:
 
                     mean_vector[i] += b_i * self.meanfunc.mean(x_i, params=meanfunc_params, bands=[self.bands[i]])
 
+            #Loop over the time data, x, a second time (for the cov matrix)
             for j in range(len(x)):
 
                 x_j = self._time_shift(x[j], delta_vector[j])
                 b_j = self._magnify(x_j, beta_vector[j])
 
+                #If both data points are resolved, then the covariance element K[i,j] is one evaluation of the kernel function.
                 if 'image' in self.images[i] and 'image' in self.images[j]:
                     K[i,j] = b_i * b_j * self.kernel.covariance(x_i, x_j, params=kernel_params)
 
+                #If only one data point is resolved, then you have to loop over one image
                 elif 'image' in self.images[i] and self.images[j] == 'unresolved':
                     for n in range(self.n_images):
                         x_j = x[j] - self.deltas[n]
@@ -106,6 +127,7 @@ class ConstantLensing:
 
                         K[i,j] += b_i * b_j * self.kernel.covariance(x_i, x_j, params=kernel_params) 
 
+                #If both data points are resolved, then you have to loop over both images.
                 elif self.images[i] == 'unresolved' and self.images[j] == 'unresolved':
                     for n in range(self.n_images):
                         for m in range(self.n_images):
@@ -116,6 +138,7 @@ class ConstantLensing:
 
                             K[i,j] += b_i * b_j * self.kernel.covariance(x_i, x_j, params=kernel_params)
 
+        #Multiply K by a mask which removes covariance between different bands and add measurement errors.
         cov_matrix = jnp.multiply(self.mask, K) + jnp.diag(yerr**2)
         return mean_vector, cov_matrix
 
