@@ -74,10 +74,6 @@ class GP:
         self.jit_loglikelihood = jax.jit(self.loglikelihood)
         
     def _prepare_indices(self, x, band, image):
-        # Store n_bands/images information
-        self.n_bands = len(np.unique(band))
-        self.n_images = len(np.unique(image))
-        
         # Store indices information
         indices = [0]
         if band is not None:
@@ -136,26 +132,16 @@ class GP:
         """
         return 0
     
-    def loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params):
+    def loglikelihood(self, y, mean, cov):
         """
         Compute the log likelihood of a multivariate normal PDF.
         """
-        shifted_x, b_vector = self.lensingmodel.lens(x, params=lensing_params)
-
-        # Compute the mean vector for the given input data points x
-        self.mean = b_vector * self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.bands)
-        
-        # Compute the covariance matrix K for the given input data points x
-        # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
-        K = jnp.outer(b_vector, b_vector) * self.kernel.covariance(shifted_x, params=kernel_params)
-        self.cov = jnp.multiply(self.lensingmodel.mask, K) + jnp.diag(yerr**2)
-        
         # Compute the logarithm of the determinant of the covariance matrix
-        L = jnp.linalg.cholesky(self.cov)
+        L = jnp.linalg.cholesky(cov)
         a = self.factor + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        z = solve_triangular(L, self.mean - y, lower=True)
+        z = solve_triangular(L, mean - y, lower=True)
         b = z.T @ z
         
         # Compute the log likelihood of a MVN PDF
@@ -200,9 +186,10 @@ class GP:
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
         # Therefore, we take the log likelihood of each band separately and sum them
-        loglike = self.loglikelihood(self.x, self.y, self.yerr, kernel_params, meanfunc_params, lensing_params)
+        self.mean, self.cov = self.lensingmodel.lensed_mean_covariance(self.x, self.yerr, kernel_params, meanfunc_params, lensing_params)
+        loglike = self.loglikelihood(self.y, self.mean, self.cov)
         loglike += log_prior
-        
+
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
         if jnp.isinf(loglike) or jnp.isnan(loglike):
             return invert * -jnp.inf
@@ -274,11 +261,7 @@ class GP:
         
         # Store n_bands, n_images, and indices information
         self._prepare_indices(self.x, band, image)
-        try:
-            self.lensingmodel.import_from_gp(self.n_bands, self.n_images, self.indices)
-        except:
-            fix_lensing_params = True
-            pass
+        self.lensingmodel.import_from_gp(self.kernel, self.meanfunc, band, image, self.indices)
 
         # Determine the number of dimensions for optimization/sampling
         self.ndim = 0

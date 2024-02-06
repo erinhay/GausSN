@@ -300,5 +300,5 @@ class QuarticFunction:
     def mean(self, y, params=None, bands=None):
         if params != None:
             self._reset(params)
-        mu = a*(y**4) + b*(y**3) + c*(y**2) + d*y + e
+        mu = self.a*(y**4) + self.b*(y**3) + self.c*(y**2) + self.d*y + self.e
         return mu
