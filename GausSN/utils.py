@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from dynesty import plotting as dyplot
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
 def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange'}, title='Gravitationally Lensed Supernova'):
@@ -77,3 +78,16 @@ def plot_object_mag(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson
     fig.supylabel('Magnitude', fontsize=20, x=-0.06)
     plt.subplots_adjust(hspace=0)
     return fig
+
+def make_traceplot(results, param_names=None, truths=None):
+    plt.figure()
+    fig, ax = dyplot.traceplot(results, show_titles=True, labels=param_names, truths=truths)
+    fig.tight_layout()
+    return fig, ax
+
+def make_corner(results, param_names=None, truths=None):
+    fig, ax = dyplot.cornerplot(results, show_titles=True, labels=param_names, truths=truths, label_kwargs={'fontsize': 16},
+                                truth_color='crimson', truth_kwargs={'alpha': 1}, smooth=0.02, color='tab:blue',
+                                hist_kwargs={'alpha': 0.6, 'histtype': 'stepfilled'}, hist2d_kwargs={'fill_contours': False},
+                                quantiles=[0.025, 0.5, 0.975], quantiles_2d=[0.1, 0.4, 0.65, 0.85, 0.96])
+    return fig, ax

@@ -128,6 +128,80 @@ class SigmoidLensingKernel:
         self.repeats = self.indices[1:]-self.indices[:-1]
         self.mask = self._make_mask()
 
+class PolynomialLensingKernel:
+    def __init__(self, params):
+        self.A = params[0]
+        self.tau = params[1]
+        self.deltas = jnp.array([0] + params[2::7])
+        self.beta0s = jnp.array([1] + params[3::7])
+        self.beta1s = jnp.array([0] + params[4::7])
+        self.beta2s = jnp.array([0] + params[5::7])
+        self.beta3s = jnp.array([0] + params[6::7])
+        self.ls = jnp.array([0] + params[7::7])
+        self.t0s = jnp.array([0] + params[8::7])
+        self.params = params
+        self.scale = [0.5, 5]
+        self.covariance = jax.jit(self._covariance)
+
+    def _reset(self, params):
+        self.A = params[0]
+        self.tau = params[1]
+        self.deltas = jnp.array([0] + params[2::7])
+        self.beta0s = jnp.array([1] + params[3::7])
+        self.beta1s = jnp.array([0] + params[4::7])
+        self.beta2s = jnp.array([0] + params[5::7])
+        self.beta3s = jnp.array([0] + params[6::7])
+        self.ls = jnp.array([0] + params[7::7])
+        self.t0s = jnp.array([0] + params[8::7])
+        self.params = params
+
+    def _make_mask(self):
+        mask = np.zeros((self.indices[-1], self.indices[-1]))
+        for pb in range(self.n_bands):
+            start = self.indices[self.n_images*pb]
+            stop = self.indices[self.n_images*(pb+1)]
+            mask[start:stop, start:stop] = 1
+        return mask
+        
+    def _time_shift(self, x, delta):
+        return x - delta
+
+    def _lens(self, x, beta0, beta1, beta2, beta3, l, t0):
+        b = beta0 + (beta1 * ((x-t0)/l)) + (beta2 * ((x-t0)/l)**2) + (beta3 * ((x-t0)/l)**3)
+        return 10**-2 * b
+
+    def _covariance(self, x, x_prime=None, params=None):
+        if params != None:
+            self._reset(params)
+
+        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
+        beta0_vector = jnp.repeat(jnp.tile(self.beta0s, self.n_bands), self.repeats)
+        beta1_vector = jnp.repeat(jnp.tile(self.beta1s, self.n_bands), self.repeats)
+        beta2_vector = jnp.repeat(jnp.tile(self.beta2s, self.n_bands), self.repeats)
+        beta3_vector = jnp.repeat(jnp.tile(self.beta3s, self.n_bands), self.repeats)
+        l_vector = jnp.repeat(jnp.tile(self.ls, self.n_bands), self.repeats)
+        t0_vector = jnp.repeat(jnp.tile(self.t0s, self.n_bands), self.repeats)
+
+        x = self._time_shift(x, delta_vector)
+        b = self._lens(x, beta0_vector, beta1_vector, beta2_vector, beta3_vector, l_vector, t0_vector)
+
+        if x_prime != None:
+            x_prime = self._time_shift(x_prime, delta_vector)
+            b_prime = self._lens(x_prime, beta0_vector, beta1_vector, beta2_vector, beta3_vector, l_vector, t0_vector)
+        else:
+            x_prime = x
+            b_prime = b
+
+        K = jnp.outer(b, b_prime) * self.A**2 * jnp.exp(-(x[:, None] - x_prime[None, :])**2/(2*self.tau**2))
+        return jnp.multiply(self.mask, K)
+    
+    def import_from_gp(self, n_bands, n_images, indices):
+        self.n_bands = n_bands
+        self.n_images = n_images
+        self.indices = indices
+        self.repeats = self.indices[1:]-self.indices[:-1]
+        self.mask = self._make_mask()
+
 class ExpSquaredKernel:
     """
     Moving kernel defined as A^2 * exp(-(y-y')^2 / (2*tau^2)).
@@ -345,7 +419,7 @@ class GibbsKernel:
         tau_x = self.lamdba * (1 - (self.p * normal_x))
         tau_xprime = self.lamdba * (1 - (self.p * normal_xprime))
         
-        root_num = 2 * tau_x * tau_yprime
+        root_num = 2 * tau_x * tau_xprime
         exp_num = (x[:, None] - x_prime[None, :])**2
         denom = (tau_x**2) + (tau_xprime**2)
         K = self.A**2 * jnp.sqrt(root_num/denom) * jnp.exp(-exp_num/denom)
@@ -372,5 +446,66 @@ class OUKernel:
             x_prime = x
 
         K = self.A * jnp.exp(jnp.sqrt(jnp.sum(x[:, None] - x_prime[None, :])) / self.l)
+        return K
+
+class PeriodicKernel:
+    def __init__(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.p = params[2]
+        self.params = params
+        self.scale = [0]
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.p = params[2]
+        self.params = params
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        if params != None:
+            self._reset(params)
+
+        if x_prime == None:
+            x_prime = x
+
+        vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
+        sin = vector_mag / self.p
+        exponent = -2 * ( jnp.sin(jnp.pi * sin) / self.l)**2
+        K = self.A * jnp.exp(exponent)
+        return K
+
+class JJKernel:
+    def __init__(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.m = params[2]
+        self.b = params[3]
+        self.params = params
+        self.scale = []
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.m = params[2]
+        self.b = params[3]
+        self.params = params
+
+    def _p(self, x):
+        return self.m * x + self.b
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        if params != None:
+            self._reset(params)
+
+        if x_prime == None:
+            x_prime = x
+
+        vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
+        sin = vector_mag / self._p(x)
+        exponent = -2 * ( jnp.sin(jnp.pi * sin) / self.l)**2
+        K = self.A * jnp.exp(exponent)
         return K
         
