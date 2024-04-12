@@ -5,12 +5,13 @@ from dynesty import plotting as dyplot
 from GausSN import gausSN, kernels, meanfuncs, lensingmodels
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
+ordered = np.array(['B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'lsstr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
+
 def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange'}, title='Gravitationally Lensed Supernova'):
 
     fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(8,3*len(np.unique(data['band']))), sharex=True)
 
     if len(np.unique(data['band'])) > 1:
-        ordered = np.array(['B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'lsstr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W'])
         bands = ordered[np.isin(ordered, data['band'])]
         for b, pb_id in enumerate(bands):
             band = data[data['band'] == pb_id]
@@ -46,7 +47,6 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
 
 def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, title=''):
 
-    ordered = np.array(['B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'lsstr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W'])
     bands = ordered[np.isin(ordered, data['band'])]
     color_dict = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}
 
