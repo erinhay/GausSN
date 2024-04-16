@@ -6,19 +6,19 @@ from jax.scipy.linalg import solve_triangular
 from GausSN import lensingmodels
 try:
     from scipy.optimize import minimize
-except:
+except ImportError:
     pass
 try:
     import dynesty
-except:
+except ImportError:
     pass
 try:
     import emcee
-except:
+except ImportError:
     pass
 try:
     import zeus
-except:
+except ImportError:
     pass
 
 jax.config.update('jax_enable_x64', True)
@@ -64,6 +64,11 @@ class GP:
     def __init__(self, kernel, meanfunc, lensingmodel=None):
         """
         Initialize with a kernel and mean function.
+        
+        Parameters:
+            kernel: Kernel function defining covariance.
+            meanfunc: Mean function defining expected value.
+            lensingmodel: Model for lensing effects (optional).
         """
         self.kernel = kernel
         self.meanfunc = meanfunc
@@ -74,7 +79,9 @@ class GP:
         self.jit_loglikelihood = jax.jit(self.loglikelihood)
         
     def _prepare_indices(self, x, band, image):
-        # Store n_bands/images information
+        """
+        Prepare indices for multi-band/multi-image data.
+        """
         self.n_bands = len(np.unique(band))
         self.n_images = len(np.unique(image))
         
