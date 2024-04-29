@@ -1,12 +1,19 @@
-import numpy as np
 import jax.numpy as jnp
 import jax
 
 class ExpSquaredKernel:
     """
-    Moving kernel defined as A^2 * exp(-(y-y')^2 / (2*tau^2)).
+    Exponentiated Squared Kernel for Gaussian processes.
     """
     def __init__(self, params):
+        """
+        Initializes the Exponentiated Squared Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
         self.A = params[0]
         self.tau = params[1]
         self.params = params
@@ -14,11 +21,32 @@ class ExpSquaredKernel:
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
         self.A = params[0]
         self.tau = params[1]
         self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Exponentiated Squared Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, tau] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Exponentiated Squared Kernel.
+        """
         if params != None:
             self._reset(params)
 
@@ -31,9 +59,17 @@ class ExpSquaredKernel:
     
 class ExponentialKernel:
     """
-    Moving kernel defined as A^2 * exp(-|y-y'| / tau).
+    Exponential Kernel for Gaussian processes.
     """
     def __init__(self, params):
+        """
+        Initializes the Exponential Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
         self.A = params[0]
         self.tau = params[1]
         self.params = params
@@ -41,11 +77,32 @@ class ExponentialKernel:
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
         self.A = params[0]
         self.tau = params[1]
         self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Exponential Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, tau] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Exponential Kernel.
+        """
         if params != None:
             self._reset(params)
 
@@ -58,16 +115,43 @@ class ExponentialKernel:
 
 class ConstantKernel:
     def __init__(self, params):
+        """
+        Initializes the Constant Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [c].
+                c (float): Constant value of the kernel.
+        """
         self.c = params[0]
         self.params = params
         self.scale = [1]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [c].
+                c (float): Constant value of the kernel.
+        """
         self.c = params[0]
         self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Constant Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [c] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Constant Kernel.
+        """
         if params != None:
             self._reset(params)
 
@@ -78,15 +162,36 @@ class ConstantKernel:
         return K
 
 class DotProductKernel:
+    """
+    Dot Product Kernel for Gaussian processes.
+    """
     def __init__(self):
+        """
+        Initializes the Dot Product Kernel.
+        """
         self.c = 0
         self.scale = [1]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self):
+        """
+        Resets the kernel parameters.
+        """
         self.c = 0
         
     def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Dot Product Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params: Not used in this kernel.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Dot Product Kernel.
+        """
         if params != None:
             self._reset(params)
 
@@ -97,7 +202,18 @@ class DotProductKernel:
         return K
 
 class Matern32Kernel:
+    """
+    Matern 3/2 Kernel for Gaussian processes.
+    """
     def __init__(self, params):
+        """
+        Initializes the Matern 3/2 Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, l].
+                A (float): Amplitude parameter of the kernel.
+                l (float): Length scale parameter of the kernel.
+        """
         self.A = params[0]
         self.l = params[1]
         self.params = params
@@ -105,11 +221,32 @@ class Matern32Kernel:
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, l].
+                A (float): Amplitude parameter of the kernel.
+                l (float): Length scale parameter of the kernel.
+        """
         self.A = params[0]
         self.l = params[1]
         self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Matern 3/2 Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, l] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Matern 3/2 Kernel.
+        """
         if params != None:
             self._reset(params)
 
@@ -122,9 +259,17 @@ class Matern32Kernel:
 
 class Matern52Kernel:
     """
-    Stationary kernel defined as K = (1 + sqrt(5)d/length_scale + (5/3)d^2/length_scale^2) * exp(sqrt(5)d^2/length_scale).
+    Matern 5/2 Kernel for Gaussian processes.
     """
     def __init__(self, params):
+        """
+        Initializes the Matern 5/2 Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, l].
+                A (float): Amplitude parameter of the kernel.
+                l (float): Length scale parameter of the kernel.
+        """
         self.A = params[0]
         self.l = params[1]
         self.params = params
@@ -132,11 +277,32 @@ class Matern52Kernel:
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, l].
+                A (float): Amplitude parameter of the kernel.
+                l (float): Length scale parameter of the kernel.
+        """
         self.A = params[0]
         self.l = params[1]
         self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Matern 5/2 Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, l] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Matern 5/2 Kernel.
+        """
         if params != None:
             self._reset(params)
 
@@ -151,9 +317,18 @@ class Matern52Kernel:
     
 class RationalQuadraticKernel:
     """
-    Moving kernel defined as A^2 * (1 + (y-y')^2/(2*scale_mixture*tau^2)^(-scale_mixture).
+    Rational Quadratic Kernel for Gaussian processes.
     """
     def __init__(self, params):
+        """
+        Initializes the Rational Quadratic Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau, scale_mixture].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+                scale_mixture (float): Scale mixture parameter of the kernel.
+        """
         self.A = params[0]
         self.tau = params[1]
         self.scale_mixture = params[2]
@@ -162,12 +337,34 @@ class RationalQuadraticKernel:
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau, scale_mixture].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+                scale_mixture (float): Scale mixture parameter of the kernel.
+        """
         self.A = params[0]
         self.tau = params[1]
         self.scale_mixture = params[2]
         self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Rational Quadratic Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, tau, scale_mixture] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Rational Quadratic Kernel.
+        """
         if params != None:
             self._reset(params)
 
@@ -179,13 +376,26 @@ class RationalQuadraticKernel:
     
 class GibbsKernel:
     """
-    Moving kernel defined as:
+    Gibbs Kernel for Gaussian processes.
+    
+    Defined as:
         K = A^2 * ( 2*tau(y|mu, sigma)*tau(y'|mu, sigma) / (tau(y|mu, sigma)**2 + tau(y'|mu, sigma)**2) )**(1/2) * exp( (y - y')**2 / (tau(y|mu, sigma)**2 + tau(y'|mu, sigma)**2) )
     where:
         tau(y|mu, sigma) = lambda * (1 - p * N(y|mu, sigma))
     and N(y|mu, sigma) is a normal distribution with mean mu and variance sigma**2.
     """
     def __init__(self, params):
+        """
+        Initializes the Gibbs Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, lambda, p, mu, sigma].
+                A (float): Amplitude parameter of the kernel.
+                lambda (float): Lambda parameter of the kernel.
+                p (float): P parameter of the kernel.
+                mu (float): Mean of the normal distribution.
+                sigma (float): Standard deviation of the normal distribution.
+        """
         self.A = params[0]
         self.lamdba = params[1]
         self.p = params[2]
@@ -196,6 +406,17 @@ class GibbsKernel:
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, lambda, p, mu, sigma].
+                A (float): Amplitude parameter of the kernel.
+                lambda (float): Lambda parameter of the kernel.
+                p (float): P parameter of the kernel.
+                mu (float): Mean of the normal distribution.
+                sigma (float): Standard deviation of the normal distribution.
+        """
         self.A = params[0]
         self.lamdba = params[1]
         self.p = params[2]
@@ -204,6 +425,19 @@ class GibbsKernel:
         self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Gibbs Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, lambda, p, mu, sigma] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Gibbs Kernel.
+        """
         if params != None:
             self._reset(params)
 
@@ -224,6 +458,14 @@ class GibbsKernel:
     
 class OUKernel:
     def __init__(self, params):
+        """
+        Initializes the Ornstein-Uhlenbeck (OU) kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, l].
+                A (float): Amplitude parameter of the OU kernel.
+                l (float): Length scale parameter of the OU kernel.
+        """
         self.A = params[0]
         self.l = params[1]
         self.params = params
@@ -231,8 +473,54 @@ class OUKernel:
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, l].
+                A (float): Amplitude parameter of the OU kernel.
+                l (float): Length scale parameter of the OU kernel.
+        """
         self.A = params[0]
         self.l = params[1]
+        self.params = params
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Ornstein-Uhlenbeck (OU) kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, l] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the OU kernel.
+        """
+        if params != None:
+            self._reset(params)
+
+        if x_prime == None:
+            x_prime = x
+
+        K = self.A * jnp.exp(jnp.sqrt(jnp.sum(x[:, None] - x_prime[None, :])) / self.l)
+        return K
+
+class PeriodicKernel:
+    def __init__(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.p = params[2]
+        self.params = params
+        self.scale = [0]
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.p = params[2]
         self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
@@ -242,6 +530,42 @@ class OUKernel:
         if x_prime == None:
             x_prime = x
 
-        K = self.A * jnp.exp(jnp.sqrt(jnp.sum(x[:, None] - x_prime[None, :])) / self.l)
+        vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
+        sin = vector_mag / self.p
+        exponent = -2 * ( jnp.sin(jnp.pi * sin) / self.l)**2
+        K = self.A * jnp.exp(exponent)
+        return K
+
+class JJKernel:
+    def __init__(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.m = params[2]
+        self.b = params[3]
+        self.params = params
+        self.scale = []
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.m = params[2]
+        self.b = params[3]
+        self.params = params
+
+    def _p(self, x):
+        return self.m * x + self.b
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        if params != None:
+            self._reset(params)
+
+        if x_prime == None:
+            x_prime = x
+
+        vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
+        sin = vector_mag / self._p(x)
+        exponent = -2 * ( jnp.sin(jnp.pi * sin) / self.l)**2
+        K = self.A * jnp.exp(exponent)
         return K
         

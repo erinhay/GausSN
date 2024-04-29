@@ -3,6 +3,9 @@ import jax.numpy as jnp
 import jax
 
 class NoLensing:
+    """
+    NoLensing treatment for when using the Gaussian Process for cases outside of strong lensing/time-delay cosmography.
+    """
     def __init__(self):
         self.mask = 1
 
@@ -19,8 +22,19 @@ class NoLensing:
         self.meanfunc = meanfunc
         self.bands = bands
 
-class ConstantLensing:
+class ConstantMagnification:
+    """
+    The constant magnification treatment for time delay estimation.
+    """
     def __init__(self, params):
+        """
+        Initializes the ConstantMagnification class. There should be (N-1) time delays (delta) and magnifications (beta) for N images, inputted as [delta_1, beta_1, delta_2, beta_2, ...].
+
+        Args:
+            params (list): List of parameters for the ConstantMagnification class.
+                delta (float): time delay.
+                beta (float): magnification.
+        """
         self.deltas = jnp.array([0] + params[0::2])
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
@@ -32,6 +46,12 @@ class ConstantLensing:
         self.params = params
         
     def _make_mask(self):
+        """
+        Creates a mask to ensure each band in treated independently based on the indices.
+
+        Returns:
+            numpy.ndarray: Mask matrix.
+        """
         mask = np.zeros((self.indices[-1], self.indices[-1]))
         for pb in range(self.n_bands):
             start = self.indices[(self.n_images+1)*pb]
@@ -40,12 +60,43 @@ class ConstantLensing:
         return mask
 
     def _time_shift(self, x, delta):
+        """
+        Shifts the input data in time.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            delta (numpy.ndarray): Time shift values.
+
+        Returns:
+            numpy.ndarray: Shifted input data.
+        """
         return x - delta
 
     def _magnify(self, x, beta):
+        """
+        Applies magnification to the input data.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            beta (numpy.ndarray): Magnification values.
+
+        Returns:
+            numpy.ndarray: Magnified input data.
+        """
         return beta
 
     def _lens(self, x, params=None):
+        """
+        Applies the constant magnification effect.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            params: Not used in this function.
+
+        Returns:
+            new_x: time-shifted times of observations
+            b: magnification of the data at times new_x
+        """
         if params != None:
             self._reset(params)
 
@@ -143,6 +194,17 @@ class ConstantLensing:
         return mean_vector, cov_matrix
 
     def import_from_gp(self, kernel, meanfunc, bands, images, indices):
+        """
+        Imports parameters from Gaussian process.
+
+        Args:
+            n_bands (int): Number of bands.
+            n_images (int): Number of images.
+            indices (numpy.ndarray): Indices.
+
+        Returns:
+            None
+        """
         self.kernel = kernel
         self.meanfunc = meanfunc
         self.bands = bands
@@ -153,8 +215,22 @@ class ConstantLensing:
         self.repeats = self.indices[1:]-self.indices[:-1]
         self.mask = self._make_mask()
     
-class SigmoidMicrolensing:
+class SigmoidMagnification:
+    """
+    The sigmoid magnification treatment for time delay estimation. There should be (N-1) parameters for N images, inputted as [delta_1, beta0_1, beta1_1, r_1, t0_1, delta_2, beta0_2, beta1_2, r_2, t0_2, ...].
+    """
     def __init__(self, params):
+        """
+        Initializes the SigmoidMagnification class.
+
+        Args:
+            params (list): List of parameters for the SigmoidMagnification class.
+                delta (float): time delay.
+                beta0 (float): magnification before t --> - infinity (well before t0).
+                beta1 (float): magnification as t --> infinity (well after t0).
+                r (float): rate of change from beta0 to beta1.
+                t0 (float): centering of the sigmoid magnification effect.
+        """
         self.deltas = jnp.array([0] + params[5::5])
         self.beta0s = jnp.array(params[1::5])
         self.beta1s = jnp.array(params[2::5])
@@ -163,6 +239,12 @@ class SigmoidMicrolensing:
         self.params = params
         
     def _reset(self, params):
+        """
+        Resets the parameters of the sigmoid magnification model.
+
+        Args:
+            params (list): List of parameters for the sigmoid magnification model.
+        """
         self.deltas = jnp.array([0] + params[5::5])
         self.beta0s = jnp.array(params[1::5])
         self.beta1s = jnp.array(params[2::5])
@@ -171,6 +253,12 @@ class SigmoidMicrolensing:
         self.params = params
 
     def _make_mask(self):
+        """
+        Creates a mask to ensure each band in treated independently based on the indices.
+
+        Returns:
+            numpy.ndarray: Mask matrix.
+        """
         mask = np.zeros((self.indices[-1], self.indices[-1]))
         for pb in range(self.n_bands):
             start = self.indices[self.n_images*pb]
@@ -179,13 +267,44 @@ class SigmoidMicrolensing:
         return mask
         
     def _time_shift(self, x, delta):
+        """
+        Shifts the input data in time.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            delta (numpy.ndarray): Time shift values.
+
+        Returns:
+            numpy.ndarray: Shifted input data.
+        """
         return x - delta
 
     def _magnify(self, x, beta0, beta1, r, t0):
+        """
+        Applies magnification to the input data.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            beta (numpy.ndarray): Magnification values.
+
+        Returns:
+            numpy.ndarray: Magnified input data.
+        """
         denom = 1 + jnp.exp(-r * (x-t0) )
         return beta0 + (beta1/denom)
 
     def _lens(self, x, params=None):
+        """
+        Applies the sigmoid magnification effect.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            params: Not used in this function.
+
+        Returns:
+            new_x: time-shifted times of observations
+            b: magnification of the data at times new_x
+        """
         if params != None:
             self._reset(params)
 
@@ -263,125 +382,17 @@ class SigmoidMicrolensing:
         return mean_vector, cov_matrix
 
     def import_from_gp(self, kernel, meanfunc, bands, images, indices):
-        self.kernel = kernel
-        self.meanfunc = meanfunc
-        self.bands = bands
-        self.n_bands = len(np.unique(bands))
-        self.images = images
-        self.n_images = len(np.unique(images))
-        self.indices = indices
-        self.repeats = self.indices[1:]-self.indices[:-1]
-        self.mask = self._make_mask()
+        """
+        Imports parameters from Gaussian process.
 
-class PolynomialLensingKernel:
-    def __init__(self, params):
-        self.deltas = jnp.array([0] + params[0::5])
-        self.beta0s = jnp.array([1] + params[1::5])
-        self.beta1s = jnp.array([0] + params[2::5])
-        self.beta2s = jnp.array([0] + params[3::5])
-        self.beta3s = jnp.array([0] + params[4::5])
-        self.params = params
-        self.scale = [0.5, 5]
+        Args:
+            n_bands (int): Number of bands.
+            n_images (int): Number of images.
+            indices (numpy.ndarray): Indices.
 
-    def _reset(self, params):
-        self.deltas = jnp.array([0] + params[0::5])
-        self.beta0s = jnp.array([1] + params[1::5])
-        self.beta1s = jnp.array([0] + params[2::5])
-        self.beta2s = jnp.array([0] + params[3::5])
-        self.beta3s = jnp.array([0] + params[4::5])
-        self.params = params
-
-    def _make_mask(self):
-        mask = np.zeros((self.indices[-1], self.indices[-1]))
-        for pb in range(self.n_bands):
-            start = self.indices[self.n_images*pb]
-            stop = self.indices[self.n_images*(pb+1)]
-            mask[start:stop, start:stop] = 1
-        return mask
-        
-    def _time_shift(self, x, delta):
-        return x - delta
-
-    def _magnify(self, x, beta0, beta1, beta2, beta3):
-        return beta0 + (beta1*x) + (beta2 * (x**2)) + (beta3 * (x**3))
-
-    def _lens(self, x, params=None):
-        if params != None:
-            self._reset(params)
-
-        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
-        beta0_vector = jnp.repeat(jnp.tile(self.beta0s, self.n_bands), self.repeats)
-        beta1_vector = jnp.repeat(jnp.tile(self.beta1s, self.n_bands), self.repeats)
-        beta2_vector = jnp.repeat(jnp.tile(self.beta2s, self.n_bands), self.repeats)
-        beta3_vector = jnp.repeat(jnp.tile(self.beta3s, self.n_bands), self.repeats)
-
-        x = self._time_shift(x, delta_vector)
-        b = self._magnify(x, beta0_vector, beta1_vector, beta2_vector, beta3_vector)
-        return x, b
-
-    def lensed_mean_covariance(self, x, yerr, kernel_params=None, meanfunc_params=None, lensing_params=None):
-
-        mean_vector = np.zeros(len(x))
-        K = np.zeros((len(x), len(x)))
-
-        if lensing_params != None:
-            self._reset(lensing_params)
-
-        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats[:-1])
-        beta_vector = jnp.repeat(jnp.tile(self.betas, self.n_bands), self.repeats[:-1])
-
-        for i in range(len(x)):
-
-            x_i = self._time_shift(x[i], delta_vector[i])
-            b_i = self._magnify(x_i, beta_vector[i])
-
-            if 'image' in self.images[i]:
-
-                mean_vector[i] = b_i * self.meanfunc.mean(x_i, params=meanfunc_params, bands=[self.bands[i]])
-
-            elif self.images[i] == 'unresolved':
-                for n in range(self.n_images):
-                    x_i = self._time_shift(x[i], self.deltas[n])
-                    b_i = self._magnify(x_i, self.betas[n])
-
-                    mean_vector[i] += b_i * self.meanfunc.mean(x_i, params=meanfunc_params, bands=[self.bands[i]])
-
-            for j in range(len(x)):
-
-                x_j = self._time_shift(x[j], delta_vector[j])
-                b_j = self._magnify(x_j, beta_vector[j])
-
-                if 'image' in self.images[i] and 'image' in self.images[j]:
-                    K[i,j] = b_i * b_j * self.kernel.covariance(x_i, x_j, params=kernel_params)
-
-                elif 'image' in self.images[i] and self.images[j] == 'unresolved':
-                    for n in range(self.n_images):
-                        x_j = x[j] - self.deltas[n]
-                        b_j = self._magnify(x_j, self.betas[n])
-
-                        K[i,j] += b_i * b_j * self.kernel.covariance(x_i, x_j, params=kernel_params) 
-
-                elif self.images[i] == 'unresolved' and 'image' in self.images[j]:
-                    for n in range(self.n_images):
-                        x_i = x[i] - self.deltas[n]
-                        b_i = self._magnify(x_i, self.betas[n])
-
-                        K[i,j] += b_i * b_j * self.kernel.covariance(x_i, x_j, params=kernel_params) 
-
-                elif self.images[i] == 'unresolved' and self.images[j] == 'unresolved':
-                    for n in range(self.n_images):
-                        for m in range(self.n_images):
-                            x_i = x[i] - self.deltas[n]
-                            x_j = x[j] - self.deltas[m]
-                            b_i = self._magnify(x_i, self.betas[n])
-                            b_j = self._magnify(x_j, self.betas[m])
-
-                            K[i,j] += b_i * b_j * self.kernel.covariance(x_i, x_j, params=kernel_params)
-
-        cov_matrix = jnp.multiply(self.mask, K) + jnp.diag(yerr**2)
-        return mean_vector, cov_matrix
-
-    def import_from_gp(self, kernel, meanfunc, bands, images, indices):
+        Returns:
+            None
+        """
         self.kernel = kernel
         self.meanfunc = meanfunc
         self.bands = bands
@@ -504,7 +515,3 @@ class FlexibleDust_ConstantLensingKernel:
         self.repeats = self.indices[1:]-self.indices[:-1]
         self.mask = self._make_mask()
 
-# Spline ML model (think about locations of knots, number of knots)
-# Mixture of Sigmoids
-# Look at special classes of polynomials
-# Numerical Recipes (spline and interpolation chapters)
