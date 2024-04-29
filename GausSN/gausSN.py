@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import jax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve_triangular
@@ -32,19 +31,15 @@ class GP:
         meanfunc: The mean function defining the expected value of the process.
 
     Methods:
-        __init__(self, kernel, meanfunc): Initialize the GP with a kernel and mean function.
-        
-        _get_initial_guess(self, fix_mean_params, fix_kernel_params): 
-        
+        __init__(self, kernel, meanfunc, lensingmodel=None): Initialize the GP with a kernel and mean function.
+        _prepare_indices(self, x, band, image): Prepare indices for multi-band/multi-image data.
+        _get_initial_guess(self, fix_mean_params, fix_kernel_params, fix_lensing_params): Put together the vector of parameters for initialization.
+        _rescale_data(self, y, yerr): Rescale the y data and their errors.
         logprior(self, params): Default uninformative prior for MCMC sampling methods.
-        
-        loglikelihood(self, x, y, yerr, log_prior, magnification_matrix=1): Compute the log likelihood of the GP model.
-        
-        jointprobability(self, params, logprior=None, fix_mean_params=False, fix_kernel_params=False, invert=False): Compute the joint probability of kernel and mean function parameters.
-        
-        optimize_parameters(self, x, y, yerr, n_bands=1, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_mean_params=False, fix_kernel_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None): Optimize GP parameters using different methods (minimize, emcee, zeus, dynesty).
-        
-        predict(self, x_prime, x, y, yerr): Predict function values at new locations given observed data.
+        loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params): Compute the log likelihood of the GP model.
+        jointprobability(self, params, logprior=None, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, invert=1): Compute the joint probability of kernel and mean function parameters.
+        optimize_parameters(self, x, y, yerr, band=None, image=None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, host_dust_kwargs=None, lens_dust_kwargs=None): Optimize GP parameters using different methods (minimize, emcee, zeus, dynesty).
+        predict(self, x_prime, x, y, yerr, band): Predict function values at new locations given observed data.
         
     Example:
         # Create an instance of the GP class
@@ -58,7 +53,6 @@ class GP:
         # Make predictions using the optimized model
         x_new = ...
         y_pred, y_pred_variance = gp_model.predict(x_new, x_train, y_train, yerr_train)
-    
     """
     
     def __init__(self, kernel, meanfunc, lensingmodel=None):
@@ -172,7 +166,7 @@ class GP:
         
     def jointprobability(self, params, logprior = None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, invert=1):
         """
-        Compute the joint probability of the kernel and mean function parameters (if applicable).
+        Compute the joint probability of the kernel, mean function, and lensing model parameters (if applicable).
         """
 
         # Compute the log prior for the given parameters
@@ -180,7 +174,7 @@ class GP:
         if jnp.isinf(log_prior) or jnp.isnan(log_prior):
             return invert * -jnp.inf
         
-        # Reset the kernel and/or mean function parameters
+        # Reset the kernel, mean function, and/or lensing parameters
         kernel_params = None
         meanfunc_params = None
         lensing_params = None
@@ -216,7 +210,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, host_dust_kwargs=None, lens_dust_kwargs=None):
+    def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
@@ -229,41 +223,47 @@ class GP:
         :param yerr: array-like
             Measurement uncertainties of the observed values.
             
-        :param method: str, (default='minimize')
-            The method for optimizing parameters. Available options: 'minimize' (scipy.optimize.minimize BFGS), 'emcee' (ensemble MCMC sampler), 'zeus' (ensemble slice sampler), and 'dynesty' (nested sampling). Defaults to 'minimize.'
-
-        :param n_bands: int, optional (default=1)
-            If fitting multi-wavelength astronomical data, specifies the number of wavelength filters through which an object has been observed. Defaults to 1.
-
+        :param band: array-like, optional (default=None)
+            Band information for multi-band data.
+            
+        :param image: array-like, optional (default=None)
+            Image information for multi-image data.
+            
+        :param method: str, optional (default='minimize')
+            The method for optimizing parameters. Available options: 'minimize' (scipy.optimize.minimize BFGS), 'emcee' (ensemble MCMC sampler), 'zeus' (ensemble slice sampler), and 'dynesty' (nested sampling).
+            
         :param loglikelihood: function, optional (default=None)
-            The log-likelihood function for the GP model. If not specified, the log of a multivariate normal distribution PDF will be used as the loglikelihood function.
-
+            The log-likelihood function for the GP model. If not specified, the log of a multivariate normal distribution PDF will be used.
+            
         :param logprior: function, optional (default=None)
             The log-prior function for the emcee and zeus MCMC sampling methods. If not specified, no prior (uniform over all values) will be enforced.
-
+            
         :param ptform: function, optional (default=None)
             Function to transform the prior for the dynesty nested sampling process.
-
+            
         :param fix_mean_params: bool, optional (default=False)
-            Whether to fix the parameters of the mean function during optimization/sampling. By default, the mean function parameters are fit for.
-
+            Whether to fix the parameters of the mean function during optimization/sampling.
+            
         :param fix_kernel_params: bool, optional (default=False)
-            Whether to fix the parameters of the kernel function during optimization/sampling. By default, the kernel parameters are fit for.
-
+            Whether to fix the parameters of the kernel function during optimization/sampling.
+            
+        :param fix_lensing_params: bool, optional (default=False)
+            Whether to fix the parameters of the lensing model during optimization/sampling.
+            
         :param minimize_kwargs: dict, optional (default=None)
             Additional keyword arguments for the scipy.optimize.minimize function.
-
+            
         :param sampler_kwargs: dict, optional (default=None)
             Additional keyword arguments for the emcee, zeus, or dynesty sampler.
-
+            
         :param run_sampler_kwargs: dict, optional (default=None)
             Additional keyword arguments for running the emcee, zeus, or dynesty sampler.
-
+            
         :return results:
-            If using the 'minimize' method, the function will return the scipy.optimize style results.
-
+            If using the 'minimize' method, returns the scipy.optimize style results.
+            
         :return sampler:
-            If using one of 'emcee,' 'zeus,' or 'dynesty' methods, the function will return the sampler in the style of the user's choice of optimization method.
+            If using 'emcee', 'zeus', or 'dynesty' methods, returns the sampler in the style of the chosen optimization method.
         """
 
         # Handle optional arguments
@@ -344,23 +344,37 @@ class GP:
             if method == 'zeus':
                 sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, False], **sampler_kwargs)
 
-                
+
             # Run the sampler
             sampler.run_mcmc(p0, nsteps=nsteps, **run_sampler_kwargs)
             return sampler
     
     def predict(self, x_prime, x, y, yerr, band):
         """
-        For a set of observations, y, with measurement uncertainties, yerr, observed at x, give the function values at x_prime.
+        Predict function values at new locations given observed data.
         
-        expectation = mu_U + (cov_UV * cov_VV^-1) * (y - mu_V)
-        variance = cov_UU - (cov_UV * cov_VV^-1 * cov_VU)
-
-        x_prime = desired x locations of data
-        x = observed data, x
-        y = observed data, y
-
-        ONLY FOR ONE BAND!!!!!!!
+        This method calculates the expectation and variance of the predicted function values at specified new locations (x_prime) based on observed data (x, y) with associated measurement uncertainties (yerr). It assumes observations are made in a single band.
+        
+        :param x_prime: array-like
+            Desired x locations for prediction.
+        
+        :param x: array-like
+            Observed data points (independent variable).
+        
+        :param y: array-like
+            Observed values corresponding to the input data points.
+            
+        :param yerr: array-like
+            Measurement uncertainties of the observed values.
+            
+        :param band: array-like
+            Band information for the observed data.
+            
+        :return expectation: array-like
+            Predicted function values at x_prime.
+            
+        :return variance: array-like
+            Variance of the predicted function values at x_prime.
         """
         
         cov_UV = self.kernel.covariance(x_prime, x_prime=x)
