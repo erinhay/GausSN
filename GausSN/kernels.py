@@ -216,7 +216,7 @@ class GibbsKernel:
         tau_x = self.lamdba * (1 - (self.p * normal_x))
         tau_xprime = self.lamdba * (1 - (self.p * normal_xprime))
         
-        root_num = 2 * tau_x * tau_yprime
+        root_num = 2 * tau_x * tau_xprime
         exp_num = (x[:, None] - x_prime[None, :])**2
         denom = (tau_x**2) + (tau_xprime**2)
         K = self.A**2 * jnp.sqrt(root_num/denom) * jnp.exp(-exp_num/denom)
