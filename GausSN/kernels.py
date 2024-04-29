@@ -506,4 +506,65 @@ class OUKernel:
 
         K = self.A * jnp.exp(jnp.sqrt(jnp.sum(x[:, None] - x_prime[None, :])) / self.l)
         return K
+
+class PeriodicKernel:
+    def __init__(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.p = params[2]
+        self.params = params
+        self.scale = [0]
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.p = params[2]
+        self.params = params
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        if params != None:
+            self._reset(params)
+
+        if x_prime == None:
+            x_prime = x
+
+        vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
+        sin = vector_mag / self.p
+        exponent = -2 * ( jnp.sin(jnp.pi * sin) / self.l)**2
+        K = self.A * jnp.exp(exponent)
+        return K
+
+class JJKernel:
+    def __init__(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.m = params[2]
+        self.b = params[3]
+        self.params = params
+        self.scale = []
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        self.A = params[0]
+        self.l = params[1]
+        self.m = params[2]
+        self.b = params[3]
+        self.params = params
+
+    def _p(self, x):
+        return self.m * x + self.b
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        if params != None:
+            self._reset(params)
+
+        if x_prime == None:
+            x_prime = x
+
+        vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
+        sin = vector_mag / self._p(x)
+        exponent = -2 * ( jnp.sin(jnp.pi * sin) / self.l)**2
+        K = self.A * jnp.exp(exponent)
+        return K
         
