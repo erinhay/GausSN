@@ -364,4 +364,109 @@ class SinusoidalMagnification:
         self.repeats = self.indices[1:]-self.indices[:-1]
         self.mask = self._make_mask()
 
+class SigmoidChromaticMagnification:
+    """
+    The constant magnification treatment for time delay estimation.
+    """
+    def __init__(self, params):
+        """
+        Initializes the SigmoidChromaticMagnification class. There should be (N-1) time delays (delta) and (N-1)*B magnifications (beta0, beta1, r, t0) for N images in B bands, inputted as [delta_1, beta0_1_band1, beta1_1_band1, r_1_band1, t0_1_band1, beta0_1_band2, beta1_1_band2, r_1_band2, t0_1_band2, ..., beta0_1_bandB, ..., delta_2, beta0_2_band1, beta1_2_band1, r_2_band1, t0_2_band1, ...].
+
+        Args:
+            params (list): List of parameters for the SigmoidChromaticMagnification class.
+                delta (float): time delay.
+                beta (float): magnification.
+        """
+        self.deltas = jnp.array([0] + params[0::2])
+        self.betas = jnp.array([1] + params[1::2])
+        self.params = params
+        self.scale = [1]
+        self.lens = jax.jit(self._lens)
+        
+    def _reset(self, params):
+        self.deltas = jnp.array([0] + params[0::2])
+        self.betas = jnp.array([1] + params[1::2])
+        self.params = params
+        
+    def _make_mask(self):
+        """
+        Creates a mask to ensure each band in treated independently based on the indices.
+
+        Returns:
+            numpy.ndarray: Mask matrix.
+        """
+        mask = np.zeros((self.indices[-1], self.indices[-1]))
+        for pb in range(self.n_bands):
+            start = self.indices[self.n_images*pb]
+            stop = self.indices[self.n_images*(pb+1)]
+            mask[start:stop, start:stop] = 1
+        return mask
+
+    def _time_shift(self, x, delta):
+        """
+        Shifts the input data in time.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            delta (numpy.ndarray): Time shift values.
+
+        Returns:
+            numpy.ndarray: Shifted input data.
+        """
+        return x - delta
+
+    def _magnify(self, x, beta0, beta1, r, t0):
+        """
+        Applies magnification to the input data.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            beta (numpy.ndarray): Magnification values.
+
+        Returns:
+            numpy.ndarray: Magnified input data.
+        """
+        denom = 1 + jnp.exp(-r * (x-t0) )
+        return beta0 + (beta1/denom)
+
+    def _lens(self, x, params=None):
+        """
+        Applies the constant magnification effect.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            params: Not used in this function.
+
+        Returns:
+            new_x: time-shifted times of observations
+            b: magnification of the data at times new_x
+        """
+        if params != None:
+            self._reset(params)
+
+        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
+        beta_vector = jnp.repeat(jnp.tile(self.betas, self.n_bands), self.repeats)
+
+        new_x = self._time_shift(x, delta_vector)
+        b = self._magnify(new_x, beta_vector)
+
+        return new_x, b
+
+    def import_from_gp(self, n_bands, n_images, indices):
+        """
+        Imports parameters from Gaussian process.
+
+        Args:
+            n_bands (int): Number of bands.
+            n_images (int): Number of images.
+            indices (numpy.ndarray): Indices.
+
+        Returns:
+            None
+        """
+        self.n_bands = n_bands
+        self.n_images = n_images
+        self.indices = indices
+        self.repeats = self.indices[1:]-self.indices[:-1]
+        self.mask = self._make_mask()
 

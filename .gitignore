@@ -1,0 +1,14 @@
+.ipynb_checkpoints
+ipynb/
+!ipynb/getting_started.ipynb
+!ipynb/fitting_SLSN_example.ipynb
+!ipynb/stylesheet
+
+data/
+!data/glSN_forGP_sims
+
+GausSN/__pycache__/
+
+build/
+GausSN.egg-info
+
