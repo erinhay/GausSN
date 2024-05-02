@@ -10,7 +10,7 @@ plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 # Array specifying the order of bands in increasing wavelength
 ordered = np.array(['B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'lsstr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
 
-def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange'}, title='Gravitationally Lensed Supernova'):
+def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title='Gravitationally Lensed Supernova'):
     """
     Plots the glSN light curve data.
 
@@ -31,11 +31,31 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
         for b, pb_id in enumerate(bands):
             band = data[data['band'] == pb_id]
 
+            try:
+                color_dict_temp = color_dict[pb_id]
+            except:
+                color_dict_temp = color_dict
+
+            try:
+                marker_dict_temp = marker_dict[pb_id]
+            except:
+                marker_dict_temp = marker_dict
+
             # Plot flux for each image in the band
             for im_id in np.unique(data['image']):
                 image = band[band['image'] == im_id]
 
-                _, _, bars = ax[b].errorbar(image['time'], image['flux_micro'], yerr=image['fluxerr_micro'], ls='None', marker='.', color=color_dict[im_id], label='Image '+im_id[-1])
+                try:
+                    color = color_dict_temp[im_id]
+                except:
+                    color = color_dict_temp
+
+                try:
+                    marker = marker_dict_temp[im_id]
+                except:
+                    marker = marker_dict_temp
+
+                _, _, bars = ax[b].errorbar(image['time'], image['flux_micro'], yerr=image['fluxerr_micro'], ls='None', marker=marker, color=color, label='Image '+im_id[-1])
                 [bar.set_alpha(0.5) for bar in bars]
             # Set ylabel for the band
             band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F125W', 'F160W']) else pb_id
@@ -51,7 +71,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
         for im_id in np.unique(data['image']):
             image = data[data['image'] == im_id]
 
-            _, _, bars = ax.errorbar(image['time'], image['flux_micro'], yerr=image['fluxerr_micro'], ls='None', marker='.', color=color_dict[im_id], label='Image '+im_id[-1])
+            _, _, bars = ax.errorbar(image['time'], image['flux_micro'], yerr=image['fluxerr_micro'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label='Image '+im_id[-1])
             [bar.set_alpha(0.5) for bar in bars]
         # Set ylabel for the single band
         band_label = image['band'][0][-1] + ' band' if not np.isin(image['band'][0], ['F105W', 'F125W', 'F160W']) else image['band'][0]
@@ -64,10 +84,11 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     
     # Set ylabel for the flux and adjust subplot spacing
     fig.supylabel('Flux', fontsize=20, y=0.494)
-    plt.subplots_adjust(hspace=0)
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0)
     return fig, ax
 
-def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}, color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange'}, title=''):
+def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}, color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title=''):
     """
     Plots the fitted glSN with uncertainties.
 
@@ -92,16 +113,36 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     bands = ordered[np.isin(ordered, data['band'])]
 
     # Create subplots based on the number of unique bands
-    fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(8,3*len(np.unique(bands))), sharex=True, sharey=True)
+    fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(8,3*len(np.unique(bands))), sharex=True)
 
     # Plot flux measurements for each band and image
     for b, pb_id in enumerate(bands):
         band = data[data['band'] == pb_id]
 
+        try:
+            color_dict_data_temp = color_dict_data[pb_id]
+        except:
+            color_dict_data_temp = color_dict_data
+
+        try:
+            marker_dict_temp = marker_dict[pb_id]
+        except:
+            marker_dict_temp = marker_dict
+
         for im_id in np.unique(data['image']):
             image = band[band['image'] == im_id]
 
-            ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker='.', color=color_dict_data[im_id], label='Image '+im_id[-1], zorder=1)
+            try:
+                color = color_dict_data_temp[im_id]
+            except:
+                color = color_dict_data_temp
+
+            try:
+                marker = marker_dict_temp[im_id]
+            except:
+                marker = marker_dict_temp
+
+            ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label='Image '+im_id[-1], zorder=1)
         ax[b].set_ylabel(pb_id[-1] + ' band', fontsize=16)
 
     # Get equal-weighted samples from the results
@@ -155,6 +196,11 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
         for b, pb_id in enumerate(bands):
             band = data[data['band'] == pb_id]
 
+            try:
+                color_dict_fit_temp = color_dict_fit[pb_id]
+            except:
+                color_dict_fit_temp = color_dict_fit
+
             repeats = np.array([len(band[band['image'] == pb_id]) for pb_id in np.unique(data['image'])])
             lensingmodel.repeats = repeats
             lensingmodel.n_bands = 1
@@ -167,22 +213,28 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                 y_vals = np.random.multivariate_normal(mean=exp, cov=cov, size=1)
 
                 for m, im_id in enumerate(np.unique(data['image'])):
+                    
+                    try:
+                        color = color_dict_fit_temp[im_id]
+                    except:
+                        color = color_dict_fit_temp
+
                     repeats = np.zeros(len(np.unique(data['image'])), dtype='int')
                     repeats[m] = int(len(predict_times))
                     lensingmodel.repeats = repeats
                     _, b_vector_predict = lensingmodel._lens(jnp.array(predict_times))
 
-                    ax[b].plot(predict_times + lensingmodel.deltas[m], y_vals[0] * b_vector_predict, color=color_dict_fit[im_id], alpha=0.02, zorder=2)
+                    ax[b].plot(predict_times + lensingmodel.deltas[m], y_vals[0] * b_vector_predict, color=color, alpha=0.02, zorder=2)
     
     # Add legend, xlabel, title, and adjust plot limits
     ax[0].legend(loc='upper right')
     ax[-1].set_xlabel('Time [days]', fontsize=16)
     ax[0].set_title(title, fontsize=24)
 
-    ax[0].set_ylim(-0.5, 1.5)
-
     # Set ylabel for the flux and adjust subplot spacing
     fig.supylabel('Flux', fontsize=20, y=0.494)
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0)
     return fig, ax
 
 def make_traceplot(results, param_names=None, truths=None, dyplot_trace_kwargs={}):
