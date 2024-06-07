@@ -8,7 +8,7 @@ from GausSN import gausSN
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
 # Array specifying the order of bands in increasing wavelength
-ordered = np.array(['B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'lsstr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
+ordered = np.array(['UVF475W', 'UVF625W', 'UVF814W', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'lsstr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
 
 def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title='Gravitationally Lensed Supernova'):
     """
@@ -55,10 +55,10 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
                 except:
                     marker = marker_dict_temp
 
-                _, _, bars = ax[b].errorbar(image['time'], image['flux_micro'], yerr=image['fluxerr_micro'], ls='None', marker=marker, color=color, label='Image '+im_id[-1])
+                _, _, bars = ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label='Image '+im_id[-1])
                 [bar.set_alpha(0.5) for bar in bars]
             # Set ylabel for the band
-            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F125W', 'F160W']) else pb_id
+            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W']) else pb_id
             ax[b].set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -71,10 +71,10 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
         for im_id in np.unique(data['image']):
             image = data[data['image'] == im_id]
 
-            _, _, bars = ax.errorbar(image['time'], image['flux_micro'], yerr=image['fluxerr_micro'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label='Image '+im_id[-1])
+            _, _, bars = ax.errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label='Image '+im_id[-1])
             [bar.set_alpha(0.5) for bar in bars]
         # Set ylabel for the single band
-        band_label = image['band'][0][-1] + ' band' if not np.isin(image['band'][0], ['F105W', 'F125W', 'F160W']) else image['band'][0]
+        band_label = image['band'][0][-1] + ' band' if not np.isin(image['band'][0], ['F105W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W']) else image['band'][0]
         ax.set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -88,7 +88,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     fig.subplots_adjust(hspace=0)
     return fig, ax
 
-def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}, color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title=''):
+def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, predict_times = np.linspace(-30, 110, 50), color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}, color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title=''):
     """
     Plots the fitted glSN with uncertainties.
 
@@ -147,10 +147,6 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
 
     # Get equal-weighted samples from the results
     samples = results.samples_equal()
-    
-    # Number of observation points for predictions
-    N_obs = 50
-    predict_times = np.linspace(-30, 110, N_obs)
 
     # Iterate over random samples from the posterior
     for iter in np.random.choice(len(samples), 200):
