@@ -145,8 +145,12 @@ class SALTMean:
             self.x0 = params[1]
             self.x1 = params[2]
             self.c = params[3]
-        self.model = sncosmo.Model(source=self.templatename)
-        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
+        self.mwebv = 0.16
+        self.mwr_v = 3.1
+
+        dust = sncosmo.F99Dust(r_v=self.mwr_v)
+        self.model = sncosmo.Model(source=self.templatename, effects=[dust], effect_names=['mw'], effect_frames=['obs'])
+        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
 
     def _reset(self, params):
         """
@@ -167,7 +171,7 @@ class SALTMean:
             self.x0 = params[1]
             self.x1 = params[2]
             self.c = params[3]
-        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
+        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
 
     def mean(self, x, params=None, bands=None):
         """
