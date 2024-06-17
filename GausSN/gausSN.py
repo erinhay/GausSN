@@ -81,20 +81,21 @@ class GP:
         
         # Store indices information
         indices = [0]
-        if band is not None:
-            for j, pb_id in enumerate(np.unique(band)):
-                specified_band = band[band == pb_id]
-                if image is not None:
-                    for i, im_id in enumerate(np.unique(image)):
-                        specified_image = specified_band[image[band == pb_id] == im_id]
-                        indices.append(len(specified_image) + indices[-1])
+        if image is not None:
+            for im_id in np.unique(image[image != 'unresolved']):
+                specified_image = image[image == im_id]
+                if band is not None:
+                    for pb_id in np.unique(band):
+                        specified_band = specified_image[band[image == im_id] == pb_id]
+                        indices.append(len(specified_band) + indices[-1])
                 else:
-                    indices.append(len(specified_band) + indices[-1])
-        else:
-            if image is not None:
-                for i, im_id in enumerate(np.unique(image)):
-                    specified_image = image[image == im_id]
                     indices.append(len(specified_image) + indices[-1])
+
+        else:
+            if band is not None:
+                for pb_id in np.unique(band):
+                    specified_band = band[band == pb_id]
+                    indices.append(len(specified_band) + indices[-1])
             else:
                 indices.append(len(x) + indices[-1])
         
@@ -137,16 +138,26 @@ class GP:
         """
         return 0
     
-    def loglikelihood(self, y, mean, cov):
+    def loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params):
         """
         Compute the log likelihood of a multivariate normal PDF.
         """
+        shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
+
+        # Compute the mean vector for the given input data points x
+        self.mean = jnp.multiply(transform_matrix, self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.bands)) #TODO: self.bands here?
+        
+        # Compute the covariance matrix K for the given input data points x
+        # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
+        K = jnp.multiply(jnp.transpose(transform_matrix), jnp.multiply(self.kernel.covariance(shifted_x, params=kernel_params), transform_matrix)) #replace with block diag math from chap 9 matrix cookbook
+        self.cov = jnp.multiply(self.lensingmodel.mask, K) + jnp.diag(yerr**2)
+        
         # Compute the logarithm of the determinant of the covariance matrix
-        L = jnp.linalg.cholesky(cov)
+        L = jnp.linalg.cholesky(self.cov)
         a = self.factor + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        z = solve_triangular(L, mean - y, lower=True)
+        z = solve_triangular(L, self.mean - y, lower=True)
         b = z.T @ z
         
         # Compute the log likelihood of a MVN PDF

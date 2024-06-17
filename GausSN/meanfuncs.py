@@ -89,7 +89,7 @@ class sncosmoMean:
             self.amp = params[1]
         self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
 
-    def mean(self, x, params=None, bands=None):
+    def mean(self, x, params=None, bands=None): #TODO: self.bands here?
         """
         Computes the mean flux using the sncosmo model.
 
@@ -169,7 +169,7 @@ class SALTMean:
             self.c = params[3]
         self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
 
-    def mean(self, x, params=None, bands=None):
+    def mean(self, x, params=None, bands=None): #TODO: self.bands here?
         """
         Computes the mean flux using the SALT model.
 
@@ -190,7 +190,7 @@ class SALTMean:
         revert_args[args] = np.arange(len(args))
 
         reordered_x = x[args]
-        if len(bands) >= 2:
+        if len(bands) >= 2: 
             reordered_bands = bands[args]
         else:
             reordered_bands = bands
