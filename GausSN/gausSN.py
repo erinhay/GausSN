@@ -3,6 +3,7 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve_triangular
 from GausSN import lensingmodels
+import matplotlib.pyplot as plt
 try:
     from scipy.optimize import minimize
 except ImportError:
@@ -77,9 +78,31 @@ class GP:
         Prepare indices for multi-band/multi-image data.
         """
         self.n_bands = len(np.unique(band))
-        self.n_images = len(np.unique(image))
+        self.n_images = len(np.unique(image[image != 'unresolved']))
         
         # Store indices information
+        indices = [0]
+        if image is not None:
+            for im_id in np.unique(image):
+                specified_image = image[image == im_id]
+                if band is not None:
+                    for pb_id in np.unique(band):
+                        specified_band = specified_image[band[image == im_id] == pb_id]
+                        indices.append(len(specified_band) + indices[-1])
+                else:
+                    indices.append(len(specified_image) + indices[-1])
+
+        else:
+            if band is not None:
+                for pb_id in np.unique(band):
+                    specified_band = band[band == pb_id]
+                    indices.append(len(specified_band) + indices[-1])
+            else:
+                indices.append(len(x) + indices[-1])
+
+        self.indices = jnp.array(indices)
+        self.factor = (len(x) * jnp.log(2 * jnp.pi))
+
         indices = [0]
         if image is not None:
             for im_id in np.unique(image[image != 'unresolved']):
@@ -98,9 +121,8 @@ class GP:
                     indices.append(len(specified_band) + indices[-1])
             else:
                 indices.append(len(x) + indices[-1])
-        
-        self.indices = jnp.array(indices)
-        self.factor = (len(x) * jnp.log(2 * jnp.pi))
+
+        self.repeats = jnp.array(indices)[1:]-jnp.array(indices)[:-1]
         
     def _get_initial_guess(self, fix_mean_params, fix_kernel_params, fix_lensing_params):
         """
@@ -145,11 +167,11 @@ class GP:
         shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
 
         # Compute the mean vector for the given input data points x
-        self.mean = jnp.multiply(transform_matrix, self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.bands)) #TODO: self.bands here?
+        self.mean = jnp.matmul(transform_matrix, self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands))
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
-        K = jnp.multiply(jnp.transpose(transform_matrix), jnp.multiply(self.kernel.covariance(shifted_x, params=kernel_params), transform_matrix)) #replace with block diag math from chap 9 matrix cookbook
+        K = jnp.matmul(jnp.matmul(transform_matrix, self.kernel.covariance(shifted_x, params=kernel_params)), jnp.transpose(transform_matrix)) #replace with block diag math from chap 9 matrix cookbook
         self.cov = jnp.multiply(self.lensingmodel.mask, K) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
@@ -202,8 +224,7 @@ class GP:
         # Compute the log likelihood for the given parameters
         # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
         # Therefore, we take the log likelihood of each band separately and sum them
-        self.mean, self.cov = self.lensingmodel.lensed_mean_covariance(self.x, self.yerr, kernel_params, meanfunc_params, lensing_params)
-        loglike = self.loglikelihood(self.y, self.mean, self.cov)
+        loglike = self.loglikelihood(self.x, self.y, self.yerr, kernel_params, meanfunc_params, lensing_params)
         loglike += log_prior
 
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
@@ -280,10 +301,14 @@ class GP:
         self.x = jnp.array(x)
         self.y, self.yerr = self._rescale_data(jnp.array(y), jnp.array(yerr))
         self.bands = band
+        self.images = image
         
         # Store n_bands, n_images, and indices information
         self._prepare_indices(self.x, band, image)
-        self.lensingmodel.import_from_gp(self.kernel, self.meanfunc, band, image, self.indices)
+        self.lensingmodel.import_from_gp(self.kernel, self.meanfunc, band, image, self.indices, self.repeats)
+
+        repeated_for_unresolved_bands = np.tile(band[image == 'unresolved'], self.n_images - 1)
+        self.repeated_for_unresolved_bands = np.concatenate([self.bands, repeated_for_unresolved_bands])
 
         # Determine the number of dimensions for optimization/sampling
         self.ndim = 0

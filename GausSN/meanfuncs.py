@@ -44,7 +44,7 @@ class UniformMean:
         """
         if params != None:
             self._reset(params)
-        return self.c
+        return jnp.repeat(self.c, len(y))
 
 class sncosmoMean:
     """
@@ -89,7 +89,7 @@ class sncosmoMean:
             self.amp = params[1]
         self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
 
-    def mean(self, x, params=None, bands=None): #TODO: self.bands here?
+    def mean(self, x, params=None, bands=None):
         """
         Computes the mean flux using the sncosmo model.
 
@@ -105,18 +105,36 @@ class sncosmoMean:
         if params != None:
             self._reset(params)
 
-        args = np.argsort(x)
-        revert_args = np.zeros(len(args), dtype=int)
-        revert_args[args] = np.arange(len(args))
+        resolved_x = x[images != 'unresolved']
+        resolved_bands = bands[images != 'unresolved']
+        resolved_args = np.argsort(resolved_x)
+        resolved_revert_args = np.zeros(len(resolved_args), dtype=int)
+        resolved_revert_args[resolved_args] = np.arange(len(resolved_args))
 
-        reordered_x = x[args]
-        if len(bands) >= 2:
-            reordered_bands = bands[args]
+        resolved_reordered_x = resolved_x[resolved_args]
+        if len(resolved_bands) >= 2:
+            resolved_reordered_bands = resolved_bands[resolved_args]
         else:
-            reordered_bands = bands
+            resolved_reordered_bands = resolved_bands
 
-        flux = self.model.bandflux(reordered_bands, reordered_x)
-        return flux[revert_args]
+        resolved_flux = self.model.bandflux(resolved_reordered_bands, resolved_reordered_x)
+
+        unresolved_x = np.tile(x[images == 'unresolved'], np.unique(images[images != 'unresolved']))
+        unresolved_bands = np.tile(bands[images == 'unresolved'], np.unique(images[images != 'unresolved']))
+        unresolved_args = np.argsort(unresolved_x)
+        unresolved_revert_args = np.zeros(len(unresolved_args), dtype=int)
+        unresolved_revert_args[resolved_args] = np.arange(len(unresolved_args))
+
+        unresolved_reordered_x = unresolved_x[unresolved_args]
+        if len(unresolved_bands) >= 2:
+            unresolved_reordered_bands = unresolved_bands[unresolved_args]
+        else:
+            unresolved_reordered_bands = unresolved_bands
+
+        unresolved_flux = self.model.bandflux(unresolved_reordered_bands, unresolved_reordered_x)
+
+        flux = jnp.concatenate([resolved_flux[resolved_revert_args], unresolved_flux[unresolved_revert_args]])
+        return flux
 
 class SALTMean:
     """
@@ -190,12 +208,13 @@ class SALTMean:
         revert_args[args] = np.arange(len(args))
 
         reordered_x = x[args]
-        if len(bands) >= 2: 
+        if len(bands) >= 2:
             reordered_bands = bands[args]
         else:
             reordered_bands = bands
 
         flux = self.model.bandflux(reordered_bands, reordered_x)
+
         return flux[revert_args]
 
 class Sin:

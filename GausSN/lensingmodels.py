@@ -1,6 +1,7 @@
 import numpy as np
 import jax.numpy as jnp
 import jax
+from scipy.linalg import block_diag
 
 class NoLensing:
     """
@@ -9,10 +10,10 @@ class NoLensing:
     def __init__(self):
         self.mask = 1
 
-    def _lens(self, x, params=None):
+    def lens(self, x, params=None):
         return x, 1
 
-    def import_from_gp(self, kernel, meanfunc, bands=None, images=None, indices=None):
+    def import_from_gp(self, kernel, meanfunc, bands=None, images=None, indices=None, repeats=None):
         self.kernel = kernel
         self.meanfunc = meanfunc
         self.bands = bands
@@ -80,7 +81,7 @@ class ConstantMagnification:
         """
         return beta
 
-    def _lens(self, x, params=None):
+    def lens(self, x, params=None):
         """
         Applies the constant magnification effect.
 
@@ -95,23 +96,29 @@ class ConstantMagnification:
         if params != None:
             self._reset(params)
 
-        resolved_delta_vector = jnp.tile(jnp.repeat(self.deltas, self.n_images), self.repeats)
-        resolved_beta_vector = jnp.tile(jnp.repeat(self.betas, self.n_images), self.repeats)
+        resolved_delta_vector = jnp.repeat(jnp.repeat(self.deltas, self.n_bands), self.repeats)
+        resolved_beta_vector = jnp.repeat(jnp.repeat(self.betas, self.n_bands), self.repeats)
 
-        unresolved_delta_vector = jnp.repeat(self.deltas, len(x[self.images == 'unresolved']))
-        unresolved_beta_vector = jnp.repeat(self.betas, len(x[self.images == 'unresolved']))
+        unresolved_x = x[self.images == 'unresolved']
+        unresolved_delta_vector = jnp.repeat(self.deltas, len(unresolved_x))
+        unresolved_beta_vector = jnp.repeat(self.betas, len(unresolved_x))
 
         new_resolved_x = self._time_shift(x[self.images != 'unresolved'], resolved_delta_vector)
-        new_unresolved_x = self._time_shift(jnp.repeat(x[self.images == 'unresolved'], self.n_images), unresolved_delta_vector)
+        new_unresolved_x = self._time_shift(jnp.repeat(unresolved_x, self.n_images), unresolved_delta_vector)
         new_x = jnp.concatenate([new_resolved_x, new_unresolved_x])
 
         resolved_b = self._magnify(new_resolved_x, resolved_beta_vector)
-        unresolved_T = jnp.diag(self._magnify(new_unresolved_x, unresolved_beta_vector)).reshape(len(new_unresolved_x), self.n_images*len(new_unresolved_x))
-        T = jnp.block(jnp.outer(resolved_b, resolved_b), unresolved_T)
+        unresolved_b = self._magnify(new_unresolved_x, unresolved_beta_vector)
+        for m in range(self.n_images):
+            if m == 0:
+                unresolved_T = jnp.diag(unresolved_b[m*len(unresolved_x) : (m+1)*len(unresolved_x)])
+            else:
+                unresolved_T = jnp.hstack([unresolved_T, jnp.diag(unresolved_b[m*len(unresolved_x) : (m+1)*len(unresolved_x)])])
+        T = block_diag(jnp.outer(resolved_b, resolved_b), unresolved_T)
 
         return new_x, T
 
-    def import_from_gp(self, kernel, meanfunc, bands, images, indices):
+    def import_from_gp(self, kernel, meanfunc, bands, images, indices, repeats):
         """
         Imports parameters from Gaussian process.
 
@@ -128,9 +135,9 @@ class ConstantMagnification:
         self.bands = bands
         self.n_bands = len(np.unique(bands))
         self.images = images
-        self.n_images = len(np.unique(images))
+        self.n_images = len(np.unique(images[images != 'unresolved']))
         self.indices = indices
-        self.repeats = self.indices[1:]-self.indices[:-1]
+        self.repeats = repeats
         self.mask = self._make_mask()
     
 class SigmoidMagnification:
@@ -211,7 +218,7 @@ class SigmoidMagnification:
         denom = 1 + jnp.exp(-r * (x-t0) )
         return beta0 + (beta1/denom)
 
-    def _lens(self, x, params=None):
+    def lens(self, x, params=None):
         """
         Applies the sigmoid magnification effect.
 
@@ -237,7 +244,7 @@ class SigmoidMagnification:
 
         return x, b
 
-    def import_from_gp(self, kernel, meanfunc, bands, images, indices):
+    def import_from_gp(self, kernel, meanfunc, bands, images, indices, repeats):
         """
         Imports parameters from Gaussian process.
 
@@ -256,7 +263,7 @@ class SigmoidMagnification:
         self.images = images
         self.n_images = len(np.unique(images))
         self.indices = indices
-        self.repeats = self.indices[1:]-self.indices[:-1]
+        self.repeats = repeats
         self.mask = self._make_mask()
 
 class FlexibleDust_ConstantLensingKernel:
@@ -286,7 +293,7 @@ class FlexibleDust_ConstantLensingKernel:
     def _magnify(self, x, beta):
         return beta
 
-    def _lens(self, x, params=None):
+    def lens(self, x, params=None):
         if params != None:
             self._reset(params)
 
@@ -294,11 +301,11 @@ class FlexibleDust_ConstantLensingKernel:
         beta_vector = jnp.tile(self.betas, self.repeats)
 
         x = self._time_shift(x, delta_vector)
-        b = self._lens(x, beta_vector)
+        b = self._magnify(x, beta_vector)
 
         return x, b
     
-    def import_from_gp(self, kernel, meanfunc, bands, images, indices):
+    def import_from_gp(self, kernel, meanfunc, bands, images, indices, repeats):
         self.kernel = kernel
         self.meanfunc = meanfunc
         self.bands = bands
@@ -306,6 +313,6 @@ class FlexibleDust_ConstantLensingKernel:
         self.images = images
         self.n_images = len(np.unique(images))
         self.indices = indices
-        self.repeats = self.indices[1:]-self.indices[:-1]
+        self.repeats = repeats
         self.mask = self._make_mask()
 

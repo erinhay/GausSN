@@ -53,8 +53,7 @@ class ExpSquaredKernel:
         if x_prime is None:
             x_prime = x
 
-        #K = self.A**2 * jnp.exp(-(x[:, None] - x_prime[None, :])**2/(2*self.tau**2))
-        K = self.A**2 * jnp.exp(-(x - x_prime)**2/(2*self.tau**2))
+        K = self.A**2 * jnp.exp(-(x[:, None] - x_prime[None, :])**2/(2*self.tau**2))
         return K
     
 class ExponentialKernel:
