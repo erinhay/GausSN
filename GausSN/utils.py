@@ -8,7 +8,7 @@ from GausSN import gausSN
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
 # Array specifying the order of bands in increasing wavelength
-ordered = np.array(['UVF475W', 'UVF625W', 'UVF814W', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'lsstr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
+ordered = np.array(['UVF475W', 'UVF625W', 'UVF814W', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'lsstr', 'ztfr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
 
 def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title='Gravitationally Lensed Supernova'):
     """
@@ -55,7 +55,8 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
                 except:
                     marker = marker_dict_temp
 
-                _, _, bars = ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label='Image '+im_id[-1])
+                image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
+                _, _, bars = ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label)
                 [bar.set_alpha(0.5) for bar in bars]
             # Set ylabel for the band
             band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W']) else pb_id
@@ -71,7 +72,8 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
         for im_id in np.unique(data['image']):
             image = data[data['image'] == im_id]
 
-            _, _, bars = ax.errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label='Image '+im_id[-1])
+            image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
+            _, _, bars = ax.errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label=image_label)
             [bar.set_alpha(0.5) for bar in bars]
         # Set ylabel for the single band
         band_label = image['band'][0][-1] + ' band' if not np.isin(image['band'][0], ['F105W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W']) else image['band'][0]
@@ -142,7 +144,8 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
             except:
                 marker = marker_dict_temp
 
-            ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label='Image '+im_id[-1], zorder=1)
+            image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
+            ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label, zorder=1)
         ax[b].set_ylabel(pb_id[-1] + ' band', fontsize=16)
 
     # Get equal-weighted samples from the results
