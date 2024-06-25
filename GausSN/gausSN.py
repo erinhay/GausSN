@@ -81,48 +81,37 @@ class GP:
         self.n_images = len(np.unique(image[image != 'unresolved']))
         
         # Store indices information
-        indices = [0]
+        no_unresolved_indices = [0]
+        with_unresolved_indices = [0]
         if image is not None:
             for im_id in np.unique(image):
                 specified_image = image[image == im_id]
                 if band is not None:
                     for pb_id in np.unique(band):
                         specified_band = specified_image[band[image == im_id] == pb_id]
-                        indices.append(len(specified_band) + indices[-1])
+
+                        with_unresolved_indices.append(len(specified_band) + with_unresolved_indices[-1])
+                        if im_id != 'unresolved':
+                            no_unresolved_indices.append(len(specified_band) + no_unresolved_indices[-1])
                 else:
-                    indices.append(len(specified_image) + indices[-1])
+                    with_unresolved_indices.append(len(specified_band) + with_unresolved_indices[-1])
+                    if im_id != 'unresolved':
+                        no_unresolved_indices.append(len(specified_band) + no_unresolved_indices[-1])
 
         else:
             if band is not None:
                 for pb_id in np.unique(band):
                     specified_band = band[band == pb_id]
-                    indices.append(len(specified_band) + indices[-1])
+                    with_unresolved_indices.append(len(specified_band) + with_unresolved_indices[-1])
+                    no_unresolved_indices.append(len(specified_band) + no_unresolved_indices[-1])
             else:
-                indices.append(len(x) + indices[-1])
+                with_unresolved_indices.append(len(x) + with_unresolved_indices[-1])
+                no_unresolved_indices.append(len(x) + no_unresolved_indices[-1])
 
-        self.indices = jnp.array(indices)
+        
+        self.indices = jnp.array(with_unresolved_indices)
+        self.repeats = jnp.array(no_unresolved_indices)[1:]-jnp.array(no_unresolved_indices)[:-1]
         self.factor = (len(x) * jnp.log(2 * jnp.pi))
-
-        indices = [0]
-        if image is not None:
-            for im_id in np.unique(image[image != 'unresolved']):
-                specified_image = image[image == im_id]
-                if band is not None:
-                    for pb_id in np.unique(band):
-                        specified_band = specified_image[band[image == im_id] == pb_id]
-                        indices.append(len(specified_band) + indices[-1])
-                else:
-                    indices.append(len(specified_image) + indices[-1])
-
-        else:
-            if band is not None:
-                for pb_id in np.unique(band):
-                    specified_band = band[band == pb_id]
-                    indices.append(len(specified_band) + indices[-1])
-            else:
-                indices.append(len(x) + indices[-1])
-
-        self.repeats = jnp.array(indices)[1:]-jnp.array(indices)[:-1]
         
     def _get_initial_guess(self, fix_mean_params, fix_kernel_params, fix_lensing_params):
         """
@@ -175,7 +164,7 @@ class GP:
         K = self.kernel.covariance(shifted_x, params=kernel_params)
         K_transformed = jnp.matmul(jnp.matmul(transform_matrix, K), jnp.transpose(transform_matrix)) #replace with block diag math from chap 9 matrix cookbook
         cov = jnp.multiply(self.lensingmodel.mask, K_transformed) + jnp.diag(yerr**2)
-        
+
         # Compute the logarithm of the determinant of the covariance matrix
         L = jnp.linalg.cholesky(cov)
         a = self.factor + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )

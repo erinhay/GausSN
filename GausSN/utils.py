@@ -124,7 +124,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                     lensingmodel.repeats = repeats
                     shifted_predict_times, b_vector_predict = lensingmodel.lens(jnp.array(predict_times))
 
-                    ax[b].plot(predict_times + lensingmodel.deltas[m], y_vals[0] * b_vector_predict, color=color_dict[im_id], alpha=0.02, zorder=2)
+                    ax[b].plot(shifted_predict_times, y_vals[0] * b_vector_predict, color=color_dict[im_id], alpha=0.02, zorder=2)
             
     ax[0].legend(loc='upper right')
     ax[-1].set_xlabel('Time [days]', fontsize=16)

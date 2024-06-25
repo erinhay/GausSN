@@ -105,36 +105,19 @@ class sncosmoMean:
         if params != None:
             self._reset(params)
 
-        resolved_x = x[images != 'unresolved']
-        resolved_bands = bands[images != 'unresolved']
-        resolved_args = np.argsort(resolved_x)
-        resolved_revert_args = np.zeros(len(resolved_args), dtype=int)
-        resolved_revert_args[resolved_args] = np.arange(len(resolved_args))
+        args = np.argsort(x)
+        revert_args = np.zeros(len(args), dtype=int)
+        revert_args[args] = np.arange(len(args))
 
-        resolved_reordered_x = resolved_x[resolved_args]
-        if len(resolved_bands) >= 2:
-            resolved_reordered_bands = resolved_bands[resolved_args]
+        reordered_x = x[args]
+        if len(bands) >= 2:
+            reordered_bands = bands[args]
         else:
-            resolved_reordered_bands = resolved_bands
+            reordered_bands = bands
 
-        resolved_flux = self.model.bandflux(resolved_reordered_bands, resolved_reordered_x)
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
 
-        unresolved_x = np.tile(x[images == 'unresolved'], np.unique(images[images != 'unresolved']))
-        unresolved_bands = np.tile(bands[images == 'unresolved'], np.unique(images[images != 'unresolved']))
-        unresolved_args = np.argsort(unresolved_x)
-        unresolved_revert_args = np.zeros(len(unresolved_args), dtype=int)
-        unresolved_revert_args[resolved_args] = np.arange(len(unresolved_args))
-
-        unresolved_reordered_x = unresolved_x[unresolved_args]
-        if len(unresolved_bands) >= 2:
-            unresolved_reordered_bands = unresolved_bands[unresolved_args]
-        else:
-            unresolved_reordered_bands = unresolved_bands
-
-        unresolved_flux = self.model.bandflux(unresolved_reordered_bands, unresolved_reordered_x)
-
-        flux = jnp.concatenate([resolved_flux[resolved_revert_args], unresolved_flux[unresolved_revert_args]])
-        return flux
+        return flux[revert_args]
 
 class SALTMean:
     """
@@ -163,8 +146,8 @@ class SALTMean:
             self.x0 = params[1]
             self.x1 = params[2]
             self.c = params[3]
-        self.model = sncosmo.Model(source=self.templatename)
-        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
+
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c)
 
     def _reset(self, params):
         """
@@ -185,9 +168,9 @@ class SALTMean:
             self.x0 = params[1]
             self.x1 = params[2]
             self.c = params[3]
-        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c)
 
-    def mean(self, x, params=None, bands=None): #TODO: self.bands here?
+    def mean(self, x, params=None, bands=None):
         """
         Computes the mean flux using the SALT model.
 
@@ -213,7 +196,78 @@ class SALTMean:
         else:
             reordered_bands = bands
 
-        flux = self.model.bandflux(reordered_bands, reordered_x)
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
+
+        return flux[revert_args]
+    
+class ZwickyMean:
+    """
+    Mean function for Gaussian processes based on SALT template, as implemented through sncosmo.
+    """
+    def __init__(self, templatename, params, redshift=None):
+        """
+        Initializes the SALTMean function with given parameters.
+
+        Args:
+            templatename (str): Name of the SALT template.
+            params (list): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
+                redshift (float, optional): Redshift of the source. Defaults to None.
+        """
+        self.templatename = templatename
+        self.params = params
+        self.redshift = redshift
+        self.t0 = params[0]
+        self.x0 = params[1]
+        self.x1 = params[2]
+        self.c = params[3]
+        self.mwebv = 0.16
+        self.mwr_v = 3.1
+
+        dust = sncosmo.F99Dust(r_v=self.mwr_v)
+        self.model = sncosmo.Model(source=self.templatename, effects=[dust], effect_names=['mw'], effect_frames=['obs'])
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
+
+    def _reset(self, params):
+        """
+        Resets the mean function parameters.
+
+        Args:
+            params (list): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
+        """
+        self.params = params
+        self.t0 = params[0]
+        self.x0 = params[1]
+        self.x1 = params[2]
+        self.c = params[3]
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
+
+    def mean(self, x, params=None, bands=None):
+        """
+        Computes the mean flux using the SALT model.
+
+        Args:
+            x (numpy.ndarray): Input array of times.
+            params (list, optional): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
+                Defaults to None.
+            bands (list, optional): List of bands. Defaults to None.
+
+        Returns:
+            numpy.ndarray: Mean flux computed using the SALT model.
+        """
+        if params != None:
+            self._reset(params)
+
+        args = np.argsort(x)
+        revert_args = np.zeros(len(args), dtype=int)
+        revert_args[args] = np.arange(len(args))
+
+        reordered_x = x[args]
+        if len(bands) >= 2:
+            reordered_bands = bands[args]
+        else:
+            reordered_bands = bands
+
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
 
         return flux[revert_args]
 
