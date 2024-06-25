@@ -76,7 +76,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
             _, _, bars = ax.errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label=image_label)
             [bar.set_alpha(0.5) for bar in bars]
         # Set ylabel for the single band
-        band_label = image['band'][0][-1] + ' band' if not np.isin(image['band'][0], ['F105W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W']) else image['band'][0]
+        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F110W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W', 'WFI', 'EulerCAM']) else pb_id
         ax.set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -146,7 +146,8 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
 
             image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
             ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label, zorder=1)
-        ax[b].set_ylabel(pb_id[-1] + ' band', fontsize=16)
+        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F110W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W', 'WFI', 'EulerCAM']) else pb_id
+        ax[b].set_ylabel(band_label, fontsize=16)
 
     # Get equal-weighted samples from the results
     samples = results.samples_equal()
