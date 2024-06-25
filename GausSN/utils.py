@@ -8,7 +8,7 @@ from GausSN import gausSN
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
 # Array specifying the order of bands in increasing wavelength
-ordered = np.array(['UVF475W', 'UVF625W', 'UVF814W', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'lsstr', 'ztfr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
+ordered = np.array(['UVF475W', 'UVF625W', 'UVF814W', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'lsstr', 'ztfr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F110W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
 
 def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title='Gravitationally Lensed Supernova'):
     """
@@ -59,7 +59,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
                 _, _, bars = ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label)
                 [bar.set_alpha(0.5) for bar in bars]
             # Set ylabel for the band
-            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W']) else pb_id
+            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F110W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W', 'WFI', 'EulerCAM']) else pb_id
             ax[b].set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel

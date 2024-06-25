@@ -44,7 +44,7 @@ class UniformMean:
         """
         if params != None:
             self._reset(params)
-        return self.c
+        return jnp.repeat(self.c, len(y))
 
 class sncosmoMean:
     """
@@ -115,7 +115,8 @@ class sncosmoMean:
         else:
             reordered_bands = bands
 
-        flux = self.model.bandflux(reordered_bands, reordered_x)
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
+
         return flux[revert_args]
 
 class SALTMean:
@@ -146,7 +147,7 @@ class SALTMean:
             self.x1 = params[2]
             self.c = params[3]
         self.model = sncosmo.Model(source=self.templatename)
-        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c)
 
     def _reset(self, params):
         """
@@ -167,7 +168,7 @@ class SALTMean:
             self.x0 = params[1]
             self.x1 = params[2]
             self.c = params[3]
-        self.model.set(z=self.redshift, t0=self.t0, x0=5.e-3*self.x0, x1=self.x1, c=self.c)
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c)
 
     def mean(self, x, params=None, bands=None):
         """
@@ -195,7 +196,79 @@ class SALTMean:
         else:
             reordered_bands = bands
 
-        flux = self.model.bandflux(reordered_bands, reordered_x)
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
+
+        return flux[revert_args]
+    
+class ZwickyMean:
+    """
+    Mean function for Gaussian processes based on SALT template, as implemented through sncosmo.
+    """
+    def __init__(self, templatename, params, redshift=None):
+        """
+        Initializes the SALTMean function with given parameters.
+
+        Args:
+            templatename (str): Name of the SALT template.
+            params (list): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
+                redshift (float, optional): Redshift of the source. Defaults to None.
+        """
+        self.templatename = templatename
+        self.params = params
+        self.redshift = redshift
+        self.t0 = params[0]
+        self.x0 = params[1]
+        self.x1 = params[2]
+        self.c = params[3]
+        self.mwebv = 0.16
+        self.mwr_v = 3.1
+
+        dust = sncosmo.F99Dust(r_v=self.mwr_v)
+        self.model = sncosmo.Model(source=self.templatename, effects=[dust], effect_names=['mw'], effect_frames=['obs'])
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
+
+    def _reset(self, params):
+        """
+        Resets the mean function parameters.
+
+        Args:
+            params (list): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
+        """
+        self.params = params
+        self.t0 = params[0]
+        self.x0 = params[1]
+        self.x1 = params[2]
+        self.c = params[3]
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
+
+    def mean(self, x, params=None, bands=None):
+        """
+        Computes the mean flux using the SALT model.
+
+        Args:
+            x (numpy.ndarray): Input array of times.
+            params (list, optional): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
+                Defaults to None.
+            bands (list, optional): List of bands. Defaults to None.
+
+        Returns:
+            numpy.ndarray: Mean flux computed using the SALT model.
+        """
+        if params != None:
+            self._reset(params)
+
+        args = np.argsort(x)
+        revert_args = np.zeros(len(args), dtype=int)
+        revert_args[args] = np.arange(len(args))
+
+        reordered_x = x[args]
+        if len(bands) >= 2:
+            reordered_bands = bands[args]
+        else:
+            reordered_bands = bands
+
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
+
         return flux[revert_args]
 
 class Sin:
