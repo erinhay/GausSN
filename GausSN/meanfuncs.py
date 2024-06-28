@@ -146,7 +146,7 @@ class SALTMean:
             self.x0 = params[1]
             self.x1 = params[2]
             self.c = params[3]
-
+        self.model = sncosmo.Model(source=self.templatename)
         self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c)
 
     def _reset(self, params):
