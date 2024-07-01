@@ -8,7 +8,7 @@ class NoLensing:
     """
     def __init__(self):
         self.mask = 1
-        self.lens = jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
 
     def _lens(self, x, params=None):
         return x, 1
@@ -30,7 +30,7 @@ class ConstantMagnification:
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
         self.scale = [1]
-        self.lens = jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
     def _reset(self, params):
         self.deltas = jnp.array([0] + params[0::2])
@@ -140,7 +140,7 @@ class SigmoidMagnification:
         self.rs = jnp.array([0] + params[3::5])
         self.t0s = jnp.array([0] + params[4::5])
         self.params = params
-        self.lens = jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
     def _reset(self, params):
         """
@@ -263,7 +263,7 @@ class SinusoidalMagnification:
         self.t0s = jnp.array([0] + params[3::5])
         self.Ts = jnp.array([0] + params[4::5])
         self.params = params
-        self.lens = jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
     def _reset(self, params):
         """
