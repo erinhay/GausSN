@@ -9,8 +9,9 @@ class NoLensing:
     """
     def __init__(self):
         self.mask = 1
+        self.lens = self._lens #jax.jit(self._lens)
 
-    def lens(self, x, params=None):
+    def _lens(self, x, params=None):
         return x, 1
 
     def import_from_gp(self, kernel, meanfunc, bands=None, images=None, indices=None, repeats=None):
@@ -35,6 +36,7 @@ class ConstantMagnification:
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
         self.scale = [1]
+        self.lens = self._lens #jax.jit(self._lens)
         
     def _reset(self, params):
         self.deltas = jnp.array([0] + params[0::2])
@@ -50,8 +52,8 @@ class ConstantMagnification:
         """
         mask = np.zeros((self.indices[-1], self.indices[-1]))
         for pb in range(self.n_bands):
-            start = self.indices[(self.n_images+1)*pb]
-            stop = self.indices[(self.n_images+1)*(pb+1)]
+            start = self.indices[(self.n_images)*pb]
+            stop = self.indices[(self.n_images)*(pb+1)]
             mask[start:stop, start:stop] = 1
         return mask
 
@@ -81,7 +83,7 @@ class ConstantMagnification:
         """
         return beta
 
-    def lens(self, x, params=None):
+    def _lens(self, x, params=None):
         """
         Applies the constant magnification effect.
 
@@ -96,8 +98,8 @@ class ConstantMagnification:
         if params != None:
             self._reset(params)
 
-        resolved_delta_vector = jnp.repeat(jnp.repeat(self.deltas, self.n_bands), self.repeats)
-        resolved_beta_vector = jnp.repeat(jnp.repeat(self.betas, self.n_bands), self.repeats)
+        resolved_delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
+        resolved_beta_vector = jnp.repeat(jnp.tile(self.betas, self.n_bands), self.repeats)
 
         unresolved_x = x[self.images == 'unresolved']
         unresolved_delta_vector = jnp.repeat(self.deltas, len(unresolved_x))
@@ -162,6 +164,7 @@ class SigmoidMagnification:
         self.rs = jnp.array(params[3::5])
         self.t0s = jnp.array(params[4::5])
         self.params = params
+        self.lens = self._lens #jax.jit(self._lens)
         
     def _reset(self, params):
         """
@@ -218,7 +221,7 @@ class SigmoidMagnification:
         denom = 1 + jnp.exp(-r * (x-t0) )
         return beta0 + (beta1/denom)
 
-    def lens(self, x, params=None):
+    def _lens(self, x, params=None):
         """
         Applies the sigmoid magnification effect.
 
@@ -273,6 +276,7 @@ class FlexibleDust_ConstantLensingKernel:
         self.betas = jnp.concatenate([jnp.repeat(1, n_bands), jnp.array(params)[self.betas_mask]])
         self.params = params
         self.scale = [0.5, 5]
+        self.lens = self._lens #jax.jit(self._lens)
     
     def _reset(self, params):
         self.deltas = jnp.array([0] + params[0::self.n_bands+1])
@@ -293,7 +297,7 @@ class FlexibleDust_ConstantLensingKernel:
     def _magnify(self, x, beta):
         return beta
 
-    def lens(self, x, params=None):
+    def _lens(self, x, params=None):
         if params != None:
             self._reset(params)
 
