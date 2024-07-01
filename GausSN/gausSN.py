@@ -157,20 +157,20 @@ class GP:
 
         # Compute the mean vector for the given input data points x
         mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands)
-        mean_transformed = jnp.matmul(transform_matrix, mean)
+        self.mean = jnp.matmul(transform_matrix, mean)
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
         K = self.kernel.covariance(shifted_x, params=kernel_params)
         K_transformed = jnp.matmul(jnp.matmul(transform_matrix, K), jnp.transpose(transform_matrix)) #replace with block diag math from chap 9 matrix cookbook
-        cov = jnp.multiply(self.lensingmodel.mask, K_transformed) + jnp.diag(yerr**2)
+        self.cov = jnp.multiply(self.lensingmodel.mask, K_transformed) + jnp.diag(yerr**2)
 
         # Compute the logarithm of the determinant of the covariance matrix
-        L = jnp.linalg.cholesky(cov)
+        L = jnp.linalg.cholesky(self.cov)
         a = self.factor + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        z = solve_triangular(L, mean_transformed - y, lower=True)
+        z = solve_triangular(L, self.mean - y, lower=True)
         b = z.T @ z
         
         # Compute the log likelihood of a MVN PDF
