@@ -1,7 +1,7 @@
 import numpy as np
 import jax.numpy as jnp
 import jax
-from scipy.linalg import block_diag
+from jax.scipy.linalg import block_diag
 
 class NoLensing:
     """
@@ -9,7 +9,7 @@ class NoLensing:
     """
     def __init__(self):
         self.mask = 1
-        self.lens = self._lens #jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
 
     def _lens(self, x, params=None):
         return x, 1
@@ -36,7 +36,7 @@ class ConstantMagnification:
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
         self.scale = [1]
-        self.lens = self._lens #jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
     def _reset(self, params):
         self.deltas = jnp.array([0] + params[0::2])
@@ -164,7 +164,7 @@ class SigmoidMagnification:
         self.rs = jnp.array(params[3::5])
         self.t0s = jnp.array(params[4::5])
         self.params = params
-        self.lens = self._lens #jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
     def _reset(self, params):
         """
@@ -276,7 +276,7 @@ class FlexibleDust_ConstantLensingKernel:
         self.betas = jnp.concatenate([jnp.repeat(1, n_bands), jnp.array(params)[self.betas_mask]])
         self.params = params
         self.scale = [0.5, 5]
-        self.lens = self._lens #jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
     
     def _reset(self, params):
         self.deltas = jnp.array([0] + params[0::self.n_bands+1])
