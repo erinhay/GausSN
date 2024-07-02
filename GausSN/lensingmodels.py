@@ -50,11 +50,23 @@ class ConstantMagnification:
         Returns:
             numpy.ndarray: Mask matrix.
         """
-        mask = np.zeros((self.indices[-1], self.indices[-1]))
-        for pb in range(self.n_bands):
-            start = self.indices[(self.n_images)*pb]
-            stop = self.indices[(self.n_images)*(pb+1)]
-            mask[start:stop, start:stop] = 1
+        #mask = np.zeros((self.indices[-1], self.indices[-1]))
+        #for pb in range(self.n_bands):
+            #start = self.indices[(self.n_images)*pb]
+            #stop = self.indices[(self.n_images)*(pb+1)]
+            #mask[start:stop, start:stop] = 1
+        mask = np.array([[1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
+                 [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+                 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+                 [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
+                 [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+                 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+                 [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
+                 [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+                 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+                 [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
+                 [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+                 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]])
         return mask
 
     def _time_shift(self, x, delta):
@@ -98,8 +110,8 @@ class ConstantMagnification:
         if params != None:
             self._reset(params)
 
-        resolved_delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
-        resolved_beta_vector = jnp.repeat(jnp.tile(self.betas, self.n_bands), self.repeats)
+        resolved_delta_vector = jnp.repeat(jnp.repeat(self.deltas, self.n_bands), self.repeats)
+        resolved_beta_vector = jnp.repeat(jnp.repeat(self.betas, self.n_bands), self.repeats)
 
         unresolved_x = x[self.images == 'unresolved']
         unresolved_delta_vector = jnp.repeat(self.deltas, len(unresolved_x))
@@ -118,7 +130,7 @@ class ConstantMagnification:
                 unresolved_T = jnp.hstack([unresolved_T, jnp.diag(unresolved_b[m*len(unresolved_x) : (m+1)*len(unresolved_x)])])
         T = block_diag(jnp.outer(resolved_b, resolved_b), unresolved_T)
 
-        return new_x, T
+        return new_x, resolved_b, T
 
     def import_from_gp(self, kernel, meanfunc, bands, images, indices, repeats):
         """

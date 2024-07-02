@@ -153,11 +153,11 @@ class GP:
         """
         Compute the log likelihood of a multivariate normal PDF.
         """
-        shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
+        shifted_x, resolved_b, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
 
         # Compute the mean vector for the given input data points x
         mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands)
-        self.mean = jnp.matmul(transform_matrix, mean)
+        self.mean = resolved_b * mean #jnp.matmul(transform_matrix, mean)
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
