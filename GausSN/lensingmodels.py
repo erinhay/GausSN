@@ -50,23 +50,11 @@ class ConstantMagnification:
         Returns:
             numpy.ndarray: Mask matrix.
         """
-        #mask = np.zeros((self.indices[-1], self.indices[-1]))
-        #for pb in range(self.n_bands):
-            #start = self.indices[(self.n_images)*pb]
-            #stop = self.indices[(self.n_images)*(pb+1)]
-            #mask[start:stop, start:stop] = 1
-        mask = np.array([[1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
-                 [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
-                 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
-                 [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
-                 [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
-                 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
-                 [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
-                 [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
-                 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
-                 [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0],
-                 [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
-                 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]])
+        mask = np.zeros((self.indices[-1], self.indices[-1]))
+        for i in range(self.indices[-1]):
+            for j in range(self.indices[-1]):
+                if self.bands[i] == self.bands[j]:
+                    mask[i,j] = 1
         return mask
 
     def _time_shift(self, x, delta):
@@ -128,9 +116,9 @@ class ConstantMagnification:
                 unresolved_T = jnp.diag(unresolved_b[m*len(unresolved_x) : (m+1)*len(unresolved_x)])
             else:
                 unresolved_T = jnp.hstack([unresolved_T, jnp.diag(unresolved_b[m*len(unresolved_x) : (m+1)*len(unresolved_x)])])
-        T = block_diag(jnp.outer(resolved_b, resolved_b), unresolved_T)
+        T = block_diag(jnp.diag(resolved_b), unresolved_T)
 
-        return new_x, resolved_b, T
+        return new_x, T
 
     def import_from_gp(self, kernel, meanfunc, bands, images, indices, repeats):
         """
