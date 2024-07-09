@@ -225,7 +225,7 @@ class ZwickyMean:
 
         dust = sncosmo.F99Dust(r_v=self.mwr_v)
         self.model = sncosmo.Model(source=self.templatename, effects=[dust], effect_names=['mw'], effect_frames=['obs'])
-        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-9*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
 
     def _reset(self, params):
         """
@@ -239,7 +239,7 @@ class ZwickyMean:
         self.x0 = params[1]
         self.x1 = params[2]
         self.c = params[3]
-        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
+        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-9*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
 
     def mean(self, x, params=None, bands=None):
         """
