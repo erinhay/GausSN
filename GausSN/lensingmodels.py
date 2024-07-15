@@ -98,29 +98,44 @@ class ConstantMagnification:
         if params != None:
             self._reset(params)
 
-        resolved_delta_vector = jnp.repeat(jnp.repeat(self.deltas, self.n_bands), self.repeats)
-        resolved_beta_vector = jnp.repeat(jnp.repeat(self.betas, self.n_bands), self.repeats)
+        resolved_b = None
+        unresolved_T = None
 
-        unresolved_x = x[self.images == 'unresolved']
-        unresolved_delta_vector = jnp.repeat(self.deltas, len(unresolved_x))
-        unresolved_beta_vector = jnp.repeat(self.betas, len(unresolved_x))
+        if len(self.repeats) > 0:
+            resolved_x = x[self.images != 'unresolved']
+            resolved_delta_vector = jnp.repeat(jnp.repeat(self.deltas, self.n_bands), self.repeats)
+            resolved_beta_vector = jnp.repeat(jnp.repeat(self.betas, self.n_bands), self.repeats)
 
-        new_resolved_x = self._time_shift(x[self.images != 'unresolved'], resolved_delta_vector)
-        new_unresolved_x = self._time_shift(jnp.repeat(unresolved_x, self.n_images), unresolved_delta_vector)
-        new_x = jnp.concatenate([new_resolved_x, new_unresolved_x])
+            new_resolved_x = self._time_shift(resolved_x, resolved_delta_vector)
+            resolved_b = self._magnify(new_resolved_x, resolved_beta_vector)
 
-        resolved_b = self._magnify(new_resolved_x, resolved_beta_vector)
-        unresolved_b = self._magnify(new_unresolved_x, unresolved_beta_vector)
-        for m in range(self.n_images):
-            if m == 0:
-                unresolved_T = jnp.diag(unresolved_b[m*len(unresolved_x) : (m+1)*len(unresolved_x)])
-            else:
-                unresolved_T = jnp.hstack([unresolved_T, jnp.diag(unresolved_b[m*len(unresolved_x) : (m+1)*len(unresolved_x)])])
-        T = block_diag(jnp.diag(resolved_b), unresolved_T)
+        if 'unresolved' in self.images:
+            unresolved_x = x[self.images == 'unresolved']
+            unresolved_delta_vector = jnp.repeat(self.deltas, len(unresolved_x))
+            unresolved_beta_vector = jnp.repeat(self.betas, len(unresolved_x))
+
+            new_unresolved_x = self._time_shift(jnp.tile(unresolved_x, self.n_images), unresolved_delta_vector)
+            unresolved_b = self._magnify(new_unresolved_x, unresolved_beta_vector)
+
+            for m in range(self.n_images):
+                if m == 0:
+                    unresolved_T = jnp.diag(unresolved_b[m * len(unresolved_x) : (m+1) * len(unresolved_x)])
+                else:
+                    unresolved_T = jnp.hstack([unresolved_T, jnp.diag(unresolved_b[m * len(unresolved_x) : (m+1) * len(unresolved_x)])])
+
+        if resolved_b is not None and unresolved_T is not None:
+            new_x = jnp.concatenate([new_resolved_x, new_unresolved_x])
+            T = block_diag(jnp.diag(resolved_b), unresolved_T)
+        elif resolved_b is not None:
+            new_x = new_resolved_x
+            T = jnp.diag(resolved_b)
+        elif unresolved_T is not None:
+            new_x = new_unresolved_x
+            T = unresolved_T
 
         return new_x, T
 
-    def import_from_gp(self, kernel, meanfunc, bands, images, indices, repeats):
+    def import_from_gp(self, kernel, meanfunc, bands, images, n_images, indices, repeats):
         """
         Imports parameters from Gaussian process.
 
@@ -134,10 +149,10 @@ class ConstantMagnification:
         """
         self.kernel = kernel
         self.meanfunc = meanfunc
-        self.bands = bands
-        self.n_bands = len(np.unique(bands))
         self.images = images
-        self.n_images = len(np.unique(images[images != 'unresolved']))
+        self.n_images = n_images
+        self.bands = bands
+        self.n_bands = len(np.unique(self.bands))
         self.indices = indices
         self.repeats = repeats
         self.mask = self._make_mask()

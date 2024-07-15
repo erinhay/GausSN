@@ -2,6 +2,21 @@ import numpy as np
 import jax.numpy as jnp
 import sncosmo
 
+lt_g = np.loadtxt('/data/eeh55/Github/GausSN/filters/LT/Liverpool_IOO.SDSS-g.dat')
+lt_r = np.loadtxt('/data/eeh55/Github/GausSN/filters/LT/Liverpool_IOO.SDSS-r.dat')
+lt_i = np.loadtxt('/data/eeh55/Github/GausSN/filters/LT/Liverpool_IOO.SDSS-i.dat')
+lt_z = np.loadtxt('/data/eeh55/Github/GausSN/filters/LT/Liverpool_IOO.SDSS-z.dat')
+
+bandLTg = sncosmo.Bandpass(lt_g[:,0], lt_g[:,1], name='IOOg')
+bandLTr = sncosmo.Bandpass(lt_r[:,0], lt_r[:,1], name='IOOr')
+bandLTi = sncosmo.Bandpass(lt_i[:,0], lt_i[:,1], name='IOOi')
+bandLTz = sncosmo.Bandpass(lt_z[:,0], lt_z[:,1], name='IOOz')
+
+sncosmo.registry.register(bandLTg, force=True)
+sncosmo.registry.register(bandLTr, force=True)
+sncosmo.registry.register(bandLTi, force=True)
+sncosmo.registry.register(bandLTz, force=True)
+
 class UniformMean:
     """
     Uniform Mean function for Gaussian processes.

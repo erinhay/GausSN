@@ -3,7 +3,6 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve_triangular
 from GausSN import lensingmodels
-import matplotlib.pyplot as plt
 try:
     from scipy.optimize import minimize
 except ImportError:
@@ -71,14 +70,20 @@ class GP:
             self.lensingmodel = lensingmodel
         else:
             self.lensingmodel = lensingmodels.NoLensing()
-        self.jit_loglikelihood = jax.jit(self.loglikelihood)
         
-    def _prepare_indices(self, x, band, image):
+    def _prepare_indices(self, x, band, image, n_images):
         """
         Prepare indices for multi-band/multi-image data.
         """
         self.n_bands = len(np.unique(band))
-        self.n_images = len(np.unique(image[image != 'unresolved']))
+
+        if np.all(np.unique(image) == 'unresolved'):
+            if n_images is None:
+                raise ValueError("If fitting only unresolved data, you must provide the n_images parameter. Please set the number of images are present in the unresolved light curves.")
+            else:
+                self.n_images = n_images
+        else:
+            self.n_images = len(np.unique(image[image != 'unresolved']))
         
         # Store indices information
         no_unresolved_indices = [0]
@@ -224,7 +229,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
+    def optimize_parameters(self, x, y, yerr, band = None, image = None, n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
@@ -295,8 +300,8 @@ class GP:
         self.images = image
         
         # Store n_bands, n_images, and indices information
-        self._prepare_indices(self.x, band, image)
-        self.lensingmodel.import_from_gp(self.kernel, self.meanfunc, band, image, self.indices, self.repeats)
+        self._prepare_indices(self.x, band, image, n_images)
+        self.lensingmodel.import_from_gp(self.kernel, self.meanfunc, band, image, self.n_images, self.indices, self.repeats)
 
         repeated_for_unresolved_bands = np.tile(band[image == 'unresolved'], self.n_images - 1)
         self.repeated_for_unresolved_bands = np.concatenate([self.bands, repeated_for_unresolved_bands])
