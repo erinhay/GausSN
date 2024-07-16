@@ -210,7 +210,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
+    def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
@@ -276,7 +276,10 @@ class GP:
             
         # Convert data numpy arrays to jax arrays for faster computing later on
         self.x = jnp.array(x)
-        self.y, self.yerr = self._rescale_data(jnp.array(y), jnp.array(yerr))
+        if rescale_data:
+            self.y, self.yerr = self._rescale_data(jnp.array(y), jnp.array(yerr))
+        else:
+            self.y, self.yerr = jnp.array(y), jnp.array(yerr)
         self.bands = band
         
         # Store n_bands, n_images, and indices information
