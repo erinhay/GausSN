@@ -349,7 +349,7 @@ class GP:
             sampler.run_mcmc(p0, nsteps=nsteps, **run_sampler_kwargs)
             return sampler
     
-    def predict(self, x_prime, x, y, yerr, band):
+    def predict(self, x_prime, x, y, yerr, band=None):
         """
         Predict function values at new locations given observed data.
         

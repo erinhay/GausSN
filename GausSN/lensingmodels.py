@@ -6,7 +6,7 @@ class NoLensing:
     """
     NoLensing treatment for when using the Gaussian Process for cases outside of strong lensing/time-delay cosmography.
     """
-    def __init__(self):
+    def __init__(self, params=None):
         self.mask = 1
         self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
 
