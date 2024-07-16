@@ -17,6 +17,21 @@ sncosmo.registry.register(bandLTr, force=True)
 sncosmo.registry.register(bandLTi, force=True)
 sncosmo.registry.register(bandLTz, force=True)
 
+hawki_Y = np.loadtxt('/data/eeh55/Github/GausSN/filters/VLT/hawki_Y.dat')
+hawki_J = np.loadtxt('/data/eeh55/Github/GausSN/filters/VLT/hawki_J.dat')
+hawki_H = np.loadtxt('/data/eeh55/Github/GausSN/filters/VLT/hawki_H.dat')
+hawki_K = np.loadtxt('/data/eeh55/Github/GausSN/filters/VLT/hawki_Knew.dat')
+
+bandhawkiY = sncosmo.Bandpass(hawki_Y[:,0]*10, hawki_Y[:,1], name='HAWKI_Y')
+bandhawkiJ = sncosmo.Bandpass(hawki_J[:,0]*10, hawki_J[:,1], name='HAWKI_J')
+bandhawkiH = sncosmo.Bandpass(hawki_H[:,0]*10, hawki_H[:,1], name='HAWKI_H')
+bandhawkiK = sncosmo.Bandpass(hawki_K[:,0]*10, hawki_K[:,1], name='HAWKI_K')
+
+sncosmo.registry.register(bandhawkiY, force=True)
+sncosmo.registry.register(bandhawkiJ, force=True)
+sncosmo.registry.register(bandhawkiH, force=True)
+sncosmo.registry.register(bandhawkiK, force=True)
+
 class UniformMean:
     """
     Uniform Mean function for Gaussian processes.

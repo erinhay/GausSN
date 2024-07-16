@@ -106,16 +106,16 @@ class ConstantMagnification:
             resolved_delta_vector = jnp.repeat(jnp.repeat(self.deltas, self.n_bands), self.repeats)
             resolved_beta_vector = jnp.repeat(jnp.repeat(self.betas, self.n_bands), self.repeats)
 
-            new_resolved_x = self._time_shift(resolved_x, resolved_delta_vector)
-            resolved_b = self._magnify(new_resolved_x, resolved_beta_vector)
+            shifted_resolved_x = self._time_shift(resolved_x, resolved_delta_vector)
+            resolved_b = self._magnify(shifted_resolved_x, resolved_beta_vector)
 
         if 'unresolved' in self.images:
             unresolved_x = x[self.images == 'unresolved']
             unresolved_delta_vector = jnp.repeat(self.deltas, len(unresolved_x))
             unresolved_beta_vector = jnp.repeat(self.betas, len(unresolved_x))
 
-            new_unresolved_x = self._time_shift(jnp.tile(unresolved_x, self.n_images), unresolved_delta_vector)
-            unresolved_b = self._magnify(new_unresolved_x, unresolved_beta_vector)
+            shifted_unresolved_x = self._time_shift(jnp.tile(unresolved_x, self.n_images), unresolved_delta_vector)
+            unresolved_b = self._magnify(shifted_unresolved_x, unresolved_beta_vector)
 
             for m in range(self.n_images):
                 if m == 0:
@@ -124,16 +124,16 @@ class ConstantMagnification:
                     unresolved_T = jnp.hstack([unresolved_T, jnp.diag(unresolved_b[m * len(unresolved_x) : (m+1) * len(unresolved_x)])])
 
         if resolved_b is not None and unresolved_T is not None:
-            new_x = jnp.concatenate([new_resolved_x, new_unresolved_x])
+            shifted_x = jnp.concatenate([shifted_resolved_x, shifted_unresolved_x])
             T = block_diag(jnp.diag(resolved_b), unresolved_T)
         elif resolved_b is not None:
-            new_x = new_resolved_x
+            shifted_x = shifted_resolved_x
             T = jnp.diag(resolved_b)
         elif unresolved_T is not None:
-            new_x = new_unresolved_x
+            shifted_x = shifted_unresolved_x
             T = unresolved_T
 
-        return new_x, T
+        return shifted_x, T
 
     def import_from_gp(self, kernel, meanfunc, bands, images, n_images, indices, repeats):
         """

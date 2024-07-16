@@ -77,7 +77,7 @@ class GP:
         """
         self.n_bands = len(np.unique(band))
 
-        if np.all(np.unique(image) == 'unresolved'):
+        if np.all(image == 'unresolved'):
             if n_images is None:
                 raise ValueError("If fitting only unresolved data, you must provide the n_images parameter. Please set the number of images are present in the unresolved light curves.")
             else:
