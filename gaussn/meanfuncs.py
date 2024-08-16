@@ -115,17 +115,7 @@ class sncosmoMean:
         else:
             reordered_bands = bands
 
-        if len(zp) >= 2:
-            reordered_zp = zp[args]
-        else:
-            reordered_zp = zp
-        
-        if len(zpsys) >= 2:
-            reordered_zpsys = zpsys[args]
-        else:
-            reordered_zpsys = zpsys
-
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
 
         return flux[revert_args]
 

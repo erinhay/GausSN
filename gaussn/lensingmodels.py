@@ -7,9 +7,9 @@ class NoLensing:
     """
     NoLensing treatment for when using the Gaussian Process for cases outside of strong lensing/time-delay cosmography.
     """
-    def __init__(self):
+    def __init__(self, params=None):
         self.mask = 1
-        self.lens = jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
 
     def _lens(self, x, params=None):
         return x, 1
@@ -36,7 +36,7 @@ class ConstantMagnification:
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
         self.scale = [1]
-        self.lens = jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
     def _reset(self, params):
         self.deltas = jnp.array([0] + params[0::2])
@@ -319,13 +319,13 @@ class SigmoidMagnification:
                 r (float): rate of change from beta0 to beta1.
                 t0 (float): centering of the sigmoid magnification effect.
         """
-        self.deltas = jnp.array([0] + params[5::5])
-        self.beta0s = jnp.array(params[1::5])
-        self.beta1s = jnp.array(params[2::5])
-        self.rs = jnp.array(params[3::5])
-        self.t0s = jnp.array(params[4::5])
+        self.deltas = jnp.array([0] + params[0::5])
+        self.beta0s = jnp.array([1] + params[1::5])
+        self.beta1s = jnp.array([0] + params[2::5])
+        self.rs = jnp.array([0] + params[3::5])
+        self.t0s = jnp.array([0] + params[4::5])
         self.params = params
-        self.lens = jax.jit(self._lens)
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
     def _reset(self, params):
         """
@@ -334,11 +334,11 @@ class SigmoidMagnification:
         Args:
             params (list): List of parameters for the sigmoid magnification model.
         """
-        self.deltas = jnp.array([0] + params[5::5])
-        self.beta0s = jnp.array(params[1::5])
-        self.beta1s = jnp.array(params[2::5])
-        self.rs = jnp.array(params[3::5])
-        self.t0s = jnp.array(params[4::5])
+        self.deltas = jnp.array([0] + params[0::5])
+        self.beta0s = jnp.array([1] + params[1::5])
+        self.beta1s = jnp.array([0] + params[2::5])
+        self.rs = jnp.array([0] + params[3::5])
+        self.t0s = jnp.array([0] + params[4::5])
         self.params = params
 
     def _make_mask(self):
@@ -430,54 +430,127 @@ class SigmoidMagnification:
         self.repeats = repeats
         self.mask = self._make_mask()
 
-class FlexibleDust_ConstantLensingKernel:
-    def __init__(self, params, n_bands):
-        self.deltas = jnp.array([0] + params[0::2])
-        self.betas_mask = jnp.isin(jnp.arange(len(params)), jnp.concatenate([jnp.array([0,1]), jnp.array(list(range(*slice(2,None,n_bands+1).indices(len(params)))))]), invert=True)
-        self.betas = jnp.concatenate([jnp.repeat(1, n_bands), jnp.array(params)[self.betas_mask]])
+class SinusoidalMagnification:
+    """
+    The sigmoid magnification treatment for time delay estimation. There should be (N-1) parameters for N images, inputted as [delta_1, beta0_1, beta1_1, t0_1, T_1, delta_2, beta0_2, beta1_2, t0_2, T_2, ...].
+    """
+    def __init__(self, params):
+        """
+        Initializes the SigmoidMagnification class.
+
+        Args:
+            params (list): List of parameters for the SigmoidMagnification class.
+                delta (float): time delay.
+                beta0 (float): magnification before t --> - infinity (well before t0).
+                beta1 (float): magnification as t --> infinity (well after t0).
+                t0 (float): centering of the sinusoidal magnification effect.
+                T (float): timescale of the sinusoidal magnification effect.
+        """
+        self.deltas = jnp.array([0] + params[0::5])
+        self.beta0s = jnp.array([1] + params[1::5])
+        self.beta1s = jnp.array([0] + params[2::5])
+        self.t0s = jnp.array([0] + params[3::5])
+        self.Ts = jnp.array([0] + params[4::5])
         self.params = params
-        self.scale = [0.5, 5]
-        self.lens = jax.jit(self._lens)
-    
+        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
+        
     def _reset(self, params):
-        self.deltas = jnp.array([0] + params[0::self.n_bands+1])
-        self.betas = jnp.concatenate([jnp.repeat(1, self.n_bands), jnp.array(params)[self.betas_mask]])
+        """
+        Resets the parameters of the sigmoid magnification model.
+
+        Args:
+            params (list): List of parameters for the sigmoid magnification model.
+        """
+        self.deltas = jnp.array([0] + params[0::5])
+        self.beta0s = jnp.array([1] + params[1::5])
+        self.beta1s = jnp.array([0] + params[2::5])
+        self.t0s = jnp.array([0] + params[3::5])
+        self.Ts = jnp.array([0] + params[4::5])
         self.params = params
 
     def _make_mask(self):
+        """
+        Creates a mask to ensure each band in treated independently based on the indices.
+
+        Returns:
+            numpy.ndarray: Mask matrix.
+        """
         mask = np.zeros((self.indices[-1], self.indices[-1]))
         for pb in range(self.n_bands):
             start = self.indices[self.n_images*pb]
             stop = self.indices[self.n_images*(pb+1)]
             mask[start:stop, start:stop] = 1
         return mask
-
+        
     def _time_shift(self, x, delta):
+        """
+        Shifts the input data in time.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            delta (numpy.ndarray): Time shift values.
+
+        Returns:
+            numpy.ndarray: Shifted input data.
+        """
         return x - delta
 
-    def _magnify(self, x, beta):
-        return beta
+    def _magnify(self, x, beta0, beta1, t0, T):
+        """
+        Applies magnification to the input data.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            beta (numpy.ndarray): Magnification values.
+
+        Returns:
+            numpy.ndarray: Magnified input data.
+        """
+        sinusoid = jnp.sin( (x-t0) / T)
+        return beta0 + (beta1 * sinusoid)
 
     def _lens(self, x, params=None):
+        """
+        Applies the sigmoid magnification effect.
+
+        Args:
+            x (numpy.ndarray): Input data.
+            params: Not used in this function.
+
+        Returns:
+            new_x: time-shifted times of observations
+            b: magnification of the data at times new_x
+        """
         if params != None:
             self._reset(params)
 
-        delta_vector = jnp.tile(jnp.repeat(self.deltas, self.n_images), self.repeats)
-        beta_vector = jnp.tile(self.betas, self.repeats)
+        delta_vector = jnp.repeat(jnp.tile(self.deltas, self.n_bands), self.repeats)
+        beta0_vector = jnp.repeat(jnp.tile(self.beta0s, self.n_bands), self.repeats)
+        beta1_vector = jnp.repeat(jnp.tile(self.beta1s, self.n_bands), self.repeats)
+        t0_vector = jnp.repeat(jnp.tile(self.t0s, self.n_bands), self.repeats)
+        T_vector = jnp.repeat(jnp.tile(self.Ts, self.n_bands), self.repeats)
 
         x = self._time_shift(x, delta_vector)
-        b = self._magnify(x, beta_vector)
+        b = self._magnify(x, beta0_vector, beta1_vector, t0_vector, T_vector)
 
         return x, b
-    
-    def import_from_gp(self, kernel, meanfunc, bands, images, indices, repeats):
-        self.kernel = kernel
-        self.meanfunc = meanfunc
-        self.bands = bands
-        self.n_bands = len(np.unique(bands))
-        self.images = images
-        self.n_images = len(np.unique(images))
+
+    def import_from_gp(self, n_bands, n_images, indices):
+        """
+        Imports parameters from Gaussian process.
+
+        Args:
+            n_bands (int): Number of bands.
+            n_images (int): Number of images.
+            indices (numpy.ndarray): Indices.
+
+        Returns:
+            None
+        """
+        self.n_bands = n_bands
+        self.n_images = n_images
         self.indices = indices
-        self.repeats = repeats
+        self.repeats = self.indices[1:]-self.indices[:-1]
         self.mask = self._make_mask()
+
 

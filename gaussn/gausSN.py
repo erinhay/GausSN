@@ -301,7 +301,10 @@ class GP:
             
         # Convert data numpy arrays to jax arrays for faster computing later on
         self.x = jnp.array(x)
-        self.y, self.yerr = self._rescale_data(jnp.array(y), jnp.array(yerr))
+        if rescale_data:
+            self.y, self.yerr = self._rescale_data(jnp.array(y), jnp.array(yerr))
+        else:
+            self.y, self.yerr = jnp.array(y), jnp.array(yerr)
         self.bands = band
         self.images = image
         

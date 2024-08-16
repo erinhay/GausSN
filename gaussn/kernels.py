@@ -504,8 +504,8 @@ class OUKernel:
         if x_prime == None:
             x_prime = x
 
-        d = jnp.sqrt((x[:,None] - x[None:,])**2)
-        K = self.A * jnp.exp(d / self.l)
+        r2 = (x[:, None] - x_prime[None, :])**2
+        K = self.A * jnp.exp(-jnp.sqrt(r2) / self.l)
         return K
 
 class PeriodicKernel:
