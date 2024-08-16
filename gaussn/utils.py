@@ -8,9 +8,11 @@ from GausSN import gausSN
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
 # Array specifying the order of bands in increasing wavelength
-ordered = np.array(['UVF475W', 'UVF625W', 'UVF814W', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'lsstr', 'ztfr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F110W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
+ordered = np.array(['uvf475w', 'uvf625w', 'uvf814w', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'ps1::g', 'IOOg', 'lsstr', 'ztfr', 'ps1::r', 'IOOr',
+                    'lssti', 'ps1::i', 'IOOi', 'lsstz', 'IOOz', 'roman::Z', 'lssty', 'roman::Y', 'HAWKI_Y', 'roman::J', 'HAWKI_J',
+                    'roman::H', 'HAWKI_H', 'HAWKI_K', 'f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'EulerCAM', 'WFI'])
 
-def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title='Gravitationally Lensed Supernova'):
+def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange', 'unresolved': 'k'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<', 'unresolved': '.'}, title='Gravitationally Lensed Supernova'):
     """
     Plots the glSN light curve data.
 
@@ -22,9 +24,17 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     Returns:
         tuple: The figure and axis of the plot.
     """
-    # Create subplots based on the number of unique bands
-    fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(6,2*len(np.unique(data['band']))), sharex=True)
+    if 'fluxcal' in data.columns:
+        key = 'fluxcal'
+    elif 'flux' in data.columns:
+        key = 'flux'
+    else:
+        raise NameError("Please make sure you have a column labeled either flux or fluxcal in your data table!")
 
+    # Create subplots based on the number of unique bands
+    fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(6, 2*len(np.unique(data['band']))), sharex=True)
+
+    data['band'] = [pb_id.lower() for pb_id in data['band']]
     if len(np.unique(data['band'])) > 1:
         # If there are multiple bands, iterate over each band
         bands = ordered[np.isin(ordered, data['band'])]
@@ -56,10 +66,10 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
                     marker = marker_dict_temp
 
                 image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
-                _, _, bars = ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label)
+                _, _, bars = ax[b].errorbar(image['time'], image[key], yerr=image[key+'err'], ls='None', marker=marker, color=color, label=image_label)
                 [bar.set_alpha(0.5) for bar in bars]
             # Set ylabel for the band
-            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F110W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W', 'WFI', 'EulerCAM']) else pb_id
+            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'WFI', 'EulerCAM']) else pb_id
             ax[b].set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -73,10 +83,10 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
             image = data[data['image'] == im_id]
 
             image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
-            _, _, bars = ax.errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label=image_label)
+            _, _, bars = ax.errorbar(image['time'], image[key], yerr=image[key+'err'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label=image_label)
             [bar.set_alpha(0.5) for bar in bars]
         # Set ylabel for the single band
-        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F110W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W', 'WFI', 'EulerCAM']) else pb_id
+        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'uvf475w', 'uvf625w', 'uvf814w', 'WFI', 'EulerCAM']) else pb_id
         ax.set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -115,7 +125,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     bands = ordered[np.isin(ordered, data['band'])]
 
     # Create subplots based on the number of unique bands
-    fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(8,3*len(np.unique(bands))), sharex=True)
+    fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(8, 3*len(np.unique(bands))), sharex=True)
 
     # Plot flux measurements for each band and image
     for b, pb_id in enumerate(bands):
@@ -146,7 +156,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
 
             image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
             ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label, zorder=1)
-        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['F105W', 'F110W', 'F125W', 'F160W', 'UVF475W', 'UVF625W', 'UVF814W', 'WFI', 'EulerCAM']) else pb_id
+        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'WFI', 'EulerCAM']) else pb_id
         ax[b].set_ylabel(band_label, fontsize=16)
 
     # Get equal-weighted samples from the results
@@ -286,3 +296,4 @@ def make_corner(results, param_names=None, truths=None, dyplot_corner_kwargs={})
                                 truth_kwargs=truth_kwargs, smooth=smooth, color=color, hist_kwargs=hist_kwargs, hist2d_kwargs=hist2d_kwargs,
                                 quantiles=quantiles, title_quantiles=title_quantiles, quantiles_2d=quantiles_2d, **dyplot_corner_kwargs)
     return fig, ax
+
