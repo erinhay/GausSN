@@ -2,36 +2,6 @@ import numpy as np
 import jax.numpy as jnp
 import sncosmo
 
-lt_g = np.loadtxt('/data/eeh55/Github/GausSN/filters/LT/Liverpool_IOO.SDSS-g.dat')
-lt_r = np.loadtxt('/data/eeh55/Github/GausSN/filters/LT/Liverpool_IOO.SDSS-r.dat')
-lt_i = np.loadtxt('/data/eeh55/Github/GausSN/filters/LT/Liverpool_IOO.SDSS-i.dat')
-lt_z = np.loadtxt('/data/eeh55/Github/GausSN/filters/LT/Liverpool_IOO.SDSS-z.dat')
-
-bandLTg = sncosmo.Bandpass(lt_g[:,0], lt_g[:,1], name='IOOg')
-bandLTr = sncosmo.Bandpass(lt_r[:,0], lt_r[:,1], name='IOOr')
-bandLTi = sncosmo.Bandpass(lt_i[:,0], lt_i[:,1], name='IOOi')
-bandLTz = sncosmo.Bandpass(lt_z[:,0], lt_z[:,1], name='IOOz')
-
-sncosmo.registry.register(bandLTg, force=True)
-sncosmo.registry.register(bandLTr, force=True)
-sncosmo.registry.register(bandLTi, force=True)
-sncosmo.registry.register(bandLTz, force=True)
-
-hawki_Y = np.loadtxt('/data/eeh55/Github/GausSN/filters/VLT/hawki_Y.dat')
-hawki_J = np.loadtxt('/data/eeh55/Github/GausSN/filters/VLT/hawki_J.dat')
-hawki_H = np.loadtxt('/data/eeh55/Github/GausSN/filters/VLT/hawki_H.dat')
-hawki_K = np.loadtxt('/data/eeh55/Github/GausSN/filters/VLT/hawki_Knew.dat')
-
-bandhawkiY = sncosmo.Bandpass(hawki_Y[:,0]*10, hawki_Y[:,1], name='HAWKI_Y')
-bandhawkiJ = sncosmo.Bandpass(hawki_J[:,0]*10, hawki_J[:,1], name='HAWKI_J')
-bandhawkiH = sncosmo.Bandpass(hawki_H[:,0]*10, hawki_H[:,1], name='HAWKI_H')
-bandhawkiK = sncosmo.Bandpass(hawki_K[:,0]*10, hawki_K[:,1], name='HAWKI_K')
-
-sncosmo.registry.register(bandhawkiY, force=True)
-sncosmo.registry.register(bandhawkiJ, force=True)
-sncosmo.registry.register(bandhawkiH, force=True)
-sncosmo.registry.register(bandhawkiK, force=True)
-
 class UniformMean:
     """
     Uniform Mean function for Gaussian processes.
@@ -59,7 +29,7 @@ class UniformMean:
         self.c = params[0]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Uniform Mean function.
 
@@ -119,7 +89,7 @@ class sncosmoMean:
             self.amp = params[1]
         self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
 
-    def mean(self, x, params=None, bands=None):
+    def mean(self, x, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean flux using the sncosmo model.
 
@@ -145,7 +115,17 @@ class sncosmoMean:
         else:
             reordered_bands = bands
 
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
+        if len(zp) >= 2:
+            reordered_zp = zp[args]
+        else:
+            reordered_zp = zp
+        
+        if len(zpsys) >= 2:
+            reordered_zpsys = zpsys[args]
+        else:
+            reordered_zpsys = zpsys
+
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)
 
         return flux[revert_args]
 
@@ -200,7 +180,7 @@ class SALTMean:
             self.c = params[3]
         self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c)
 
-    def mean(self, x, params=None, bands=None):
+    def mean(self, x, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean flux using the SALT model.
 
@@ -226,7 +206,17 @@ class SALTMean:
         else:
             reordered_bands = bands
 
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
+        if len(zp) >= 2:
+            reordered_zp = zp[args]
+        else:
+            reordered_zp = zp
+        
+        if len(zpsys) >= 2:
+            reordered_zpsys = zpsys[args]
+        else:
+            reordered_zpsys = zpsys
+
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)
 
         return flux[revert_args]
     
@@ -253,8 +243,8 @@ class ZwickyMean:
         self.mwebv = 0.16
         self.mwr_v = 3.1
 
-        dust = sncosmo.F99Dust(r_v=self.mwr_v)
-        self.model = sncosmo.Model(source=self.templatename, effects=[dust], effect_names=['mw'], effect_frames=['obs'])
+        mwdust = sncosmo.F99Dust(r_v=self.mwr_v)
+        self.model = sncosmo.Model(source=self.templatename, effects=[mwdust], effect_names=['mw'], effect_frames=['obs'])
         self.model.set(z=self.redshift, t0=self.t0, x0=1.e-9*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
 
     def _reset(self, params):
@@ -271,7 +261,7 @@ class ZwickyMean:
         self.c = params[3]
         self.model.set(z=self.redshift, t0=self.t0, x0=1.e-9*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
 
-    def mean(self, x, params=None, bands=None):
+    def mean(self, x, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean flux using the SALT model.
 
@@ -297,7 +287,17 @@ class ZwickyMean:
         else:
             reordered_bands = bands
 
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
+        if len(zp) >= 2:
+            reordered_zp = zp[args]
+        else:
+            reordered_zp = zp
+        
+        if len(zpsys) >= 2:
+            reordered_zpsys = zpsys[args]
+        else:
+            reordered_zpsys = zpsys
+
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)
 
         return flux[revert_args]
 
@@ -336,7 +336,7 @@ class Sin:
         self.phi = params[2]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the sinusoidal mean function.
 
@@ -388,7 +388,7 @@ class Gaussian:
         self.sigma = params[2]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Gaussian mean function.
 
@@ -437,7 +437,7 @@ class ExpFunction:
         self.tau = params[1]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Exponential mean function.
 
@@ -499,7 +499,7 @@ class Bazin2009:
         self.Trise = params[4]
         self.params = params
     
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Bazin (2009) mean function.
 
@@ -570,7 +570,7 @@ class Karpenka2012:
         self.Trise = params[5]
         self.params = params
     
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Karpenka (2012) mean function.
 
@@ -640,7 +640,7 @@ class Villar2019:
         self.Trise = params[5]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Villar (2019) mean function.
 

@@ -161,7 +161,7 @@ class GP:
         shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
 
         # Compute the mean vector for the given input data points x
-        mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands)
+        mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands, zp=self.repeated_for_unresolved_zp, zpsys=self.repeated_for_unresolved_zpsys)
         self.mean = jnp.matmul(transform_matrix, mean)
         
         # Compute the covariance matrix K for the given input data points x
@@ -229,7 +229,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band = None, image = None, n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
+    def optimize_parameters(self, x, y, yerr, band = None, image = None, zp = 27.5, zpsys = 'ab', n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
@@ -247,6 +247,12 @@ class GP:
             
         :param image: array-like, optional (default=None)
             Image information for multi-image data.
+
+        :param zp: array-like, optional (default=27.5)
+            Zeropoint of the observed fluxes.
+
+        :param zpsys: array-like, optional (default='ab')
+            Zeropoint system of the observed fluxes.
             
         :param method: str, optional (default='minimize')
             The method for optimizing parameters. Available options: 'minimize' (scipy.optimize.minimize BFGS), 'emcee' (ensemble MCMC sampler), 'zeus' (ensemble slice sampler), and 'dynesty' (nested sampling).
@@ -306,6 +312,20 @@ class GP:
         repeated_for_unresolved_bands = np.tile(band[image == 'unresolved'], self.n_images - 1)
         self.repeated_for_unresolved_bands = np.concatenate([self.bands, repeated_for_unresolved_bands])
 
+        if isinstance(zp, float):
+            repeated_zp = np.repeat(zp, len(self.x))
+        else:
+            repeated_zp = zp
+        repeated_for_unresolved_zp = np.tile(repeated_zp[image == 'unresolved'], self.n_images - 1)
+        self.repeated_for_unresolved_zp = np.concatenate([repeated_zp, repeated_for_unresolved_zp])
+        
+        if isinstance(zpsys, str):
+            repeated_zpsys = np.repeat(zpsys, len(self.x))
+        else:
+            repeated_zpsys = zpsys
+        repeated_for_unresolved_zpsys = np.tile(repeated_zpsys[image == 'unresolved'], self.n_images - 1)
+        self.repeated_for_unresolved_zpsys = np.concatenate([repeated_zpsys, repeated_for_unresolved_zpsys])
+
         # Determine the number of dimensions for optimization/sampling
         self.ndim = 0
         if not fix_kernel_params:
@@ -322,7 +342,7 @@ class GP:
             logprior = self.logprior
             
         # Compute mean and covariance given the specified mean function and kernel with their initial parameters
-        self.mean = self.meanfunc.mean(self.x, bands=self.bands)
+        self.mean = self.meanfunc.mean(self.x, bands=self.bands, zp=repeated_zp, zpsys=repeated_zpsys)
         self.cov = self.kernel.covariance(self.x)
         
         if method == 'dynesty':
@@ -368,7 +388,7 @@ class GP:
             sampler.run_mcmc(p0, nsteps=nsteps, **run_sampler_kwargs)
             return sampler
     
-    def predict(self, x_prime, x, y, yerr, band):
+    def predict(self, x_prime, x, y, yerr, band, zp, zpsys):
         """
         Predict function values at new locations given observed data.
         
@@ -403,8 +423,8 @@ class GP:
 
         cov_UU = self.kernel.covariance(x_prime)
 
-        mu_U = self.meanfunc.mean(x_prime, bands=band)
-        mu_V = self.meanfunc.mean(x, bands=band)
+        mu_U = self.meanfunc.mean(x_prime, bands=band, zp=zp, zpsys=zpsys)
+        mu_V = self.meanfunc.mean(x, bands=band, zp=zp, zpsys=zpsys)
         
         expectation = mu_U + (cov_UV @ np.linalg.solve(cov_VV, y-mu_V))
         variance = cov_UU - (cov_UV @ np.linalg.solve(cov_VV, np.transpose(cov_UV)))
