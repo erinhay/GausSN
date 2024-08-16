@@ -34,6 +34,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     # Create subplots based on the number of unique bands
     fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(6, 2*len(np.unique(data['band']))), sharex=True)
 
+    data['band'] = [pb_id.lower() for pb_id in data['band']]
     if len(np.unique(data['band'])) > 1:
         # If there are multiple bands, iterate over each band
         bands = ordered[np.isin(ordered, data['band'])]
