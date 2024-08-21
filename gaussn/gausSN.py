@@ -229,7 +229,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band = None, image = None, zp = 27.5, zpsys = 'ab', n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None):
+    def optimize_parameters(self, x, y, yerr, band = None, image = None, zp = 27.5, zpsys = 'ab', n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
