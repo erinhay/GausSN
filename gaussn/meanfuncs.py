@@ -16,7 +16,6 @@ class UniformMean:
         """
         self.c = params[0]
         self.params = params
-        self.scale = [1]
         
     def _reset(self, params):
         """
@@ -289,7 +288,6 @@ class Sin:
         self.w = params[1]
         self.phi = params[2]
         self.params = params
-        self.scale = [0.25, 3, 10]
         
     def _reset(self, params):
         """
@@ -341,7 +339,6 @@ class Gaussian:
         self.mu = params[1]
         self.sigma = params[2]
         self.params = params
-        self.scale = [0.25, 5, 0.5]
         
     def _reset(self, params):
         """
@@ -392,7 +389,6 @@ class ExpFunction:
         self.A = params[0]
         self.tau = params[1]
         self.params = params
-        self.scale = [0.25, 5]
 
     def _reset(self, params):
         """
@@ -448,7 +444,6 @@ class Bazin2009:
         self.Tfall = params[3]
         self.Trise = params[4]
         self.params = params
-        self.scale = [0.25, 5, 10, 5, 5]
         
     def _reset(self, params):
         """
@@ -516,7 +511,6 @@ class Karpenka2012:
         self.Tfall = params[4]
         self.Trise = params[5]
         self.params = params
-        self.scale = [0.25, 5, 10, 10, 5, 5]
         
     def _reset(self, params):
         """
@@ -587,7 +581,6 @@ class Villar2019:
         self.Tfall = params[4]
         self.Trise = params[5]
         self.params = params
-        self.scale = [0.25, 5, 10, 10, 5, 5]
         
     def _reset(self, params):
         """

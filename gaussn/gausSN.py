@@ -33,7 +33,6 @@ class GP:
     Methods:
         __init__(self, kernel, meanfunc, lensingmodel=None): Initialize the GP with a kernel and mean function.
         _prepare_indices(self, x, band, image): Prepare indices for multi-band/multi-image data.
-        _get_initial_guess(self, fix_mean_params, fix_kernel_params, fix_lensing_params): Put together the vector of parameters for initialization.
         _rescale_data(self, y, yerr): Rescale the y data and their errors.
         logprior(self, params): Default uninformative prior for MCMC sampling methods.
         loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params): Compute the log likelihood of the GP model.
@@ -100,28 +99,24 @@ class GP:
         
         self.indices = jnp.array(indices)
         self.factor = (len(x) * jnp.log(2 * jnp.pi))
-        
-    def _get_initial_guess(self, fix_mean_params, fix_kernel_params, fix_lensing_params):
+
+    def _get_initial_pos(self, fix_mean_params, fix_kernel_params, fix_lensing_params):
         """
-        Put together the vector (init_guess) of parameters which the mean function and kernel are initialized with at the starting location for the optimization/sampling process. The parameters of the kernel are stacked first, followed by the mean function parameters. For MCMC sampling, there will be some scatter enforced around the initial vector values. To set the scale of this scatter, an init_guess_scale vector is also compiled.
+        Put together the vector (init_pos) of parameters which the mean function and kernel are initialized with at the starting location for the optimization/sampling process. The parameters of the kernel are stacked first, followed by the mean function parameters.
         """
-        init_guess = []
-        init_guess_scale = []
+        init_pos = []
         if not fix_kernel_params:
-            init_guess.extend(self.kernel.params)
-            init_guess_scale.extend(self.kernel.scale)
+            init_pos.extend(self.kernel.params)
         if not fix_mean_params:
-            init_guess.extend(self.meanfunc.params)
-            init_guess_scale.extend(self.meanfunc.scale)
+            init_pos.extend(self.meanfunc.params)
         if not fix_lensing_params:
-            init_guess.extend(self.lensingmodel.params)
-            init_guess_scale.extend(self.lensingmodel.scale)
+            init_pos.extend(self.lensingmodel.params)
             
-        if len(init_guess) < 0.5:
+        if len(init_pos) < 0.5:
                 raise Exception("No parameters to fit. Check fix_mean_params and fix_kernel_params to make sure there are parameters to fit.")
 
-        return init_guess, init_guess_scale
-
+        return init_pos
+    
     def _rescale_data(self, y, yerr):
         """
         Rescale the y data and their errors so it spans only 1 unit.
@@ -210,7 +205,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band = None, image = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
+    def optimize_parameters(self, x, y, yerr, band=None, image=None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, init_scale=1., minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
@@ -249,6 +244,9 @@ class GP:
             
         :param fix_lensing_params: bool, optional (default=False)
             Whether to fix the parameters of the lensing model during optimization/sampling.
+
+        :param init_scale: int, float, or array-like, optional (default=1)
+            If using emcee or zeus, the scatter introduced around the initial parameter positions to use when initializing the chains. This parameter should either be a single number (e.g., init_scale = 1.) or a list with the scale values for each parameter being fit (e.g. init_scale = [1., 1., 1.] when fitting with three free parameters). Defaults to 1 for all parameters.
             
         :param minimize_kwargs: dict, optional (default=None)
             Additional keyword arguments for the scipy.optimize.minimize function.
@@ -322,20 +320,23 @@ class GP:
         if method == 'emcee' or method == 'zeus' or method == 'minimize':
         
             # Get vector of initial parameters, which is required for optmizing/sampling with the minimize, emcee, and zeus methods
-            init_guess, init_guess_scale = self._get_initial_guess(fix_kernel_params, fix_mean_params, fix_lensing_params)
+            init_pos = self._get_initial_pos(fix_kernel_params, fix_mean_params, fix_lensing_params)
+
+            if type(init_scale) == list and len(init_pos) != len(init_scale):
+                raise ValueError("The length of the initial parameter positions does not match the length of the list with the initial parameter scatter. The init_scale parameter should either be a single number (e.g., init_scale = 1.) or a list with the scale values for each parameter being fit (e.g. init_scale = [1., 1., 1.] when fitting with three free parameters)")
 
             if method == 'minimize': 
-                results = minimize(self.jointprobability, init_guess, args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, -1), **minimize_kwargs)
+                results = minimize(self.jointprobability, init_pos, args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, -1), **minimize_kwargs)
                 return results
 
-            if np.isinf(np.any(logprior(init_guess))):
+            if np.isinf(np.any(logprior(init_pos))):
                 raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel and mean function were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
                 
             # Initialize walkers with random initial positions around the initial guess
-            p0 = np.random.normal(init_guess, init_guess_scale, size=(nwalkers, self.ndim))
+            p0 = np.random.normal(init_pos, init_scale, size=(nwalkers, self.ndim))
             for r, row in enumerate(p0):
                 while np.isinf(logprior(row)):
-                    p0[r] = np.random.normal(init_guess, 0.001)
+                    p0[r] = np.random.normal(init_pos, 0.001)
 
             nwalkers = sampler_kwargs.pop('nwalkers', 24)
             nsteps = run_sampler_kwargs.pop('nsteps', 1000)

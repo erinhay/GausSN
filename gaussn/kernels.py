@@ -17,7 +17,6 @@ class ExpSquaredKernel:
         self.A = params[0]
         self.tau = params[1]
         self.params = params
-        self.scale = [0.5, 5]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -72,7 +71,6 @@ class ExponentialKernel:
         self.A = params[0]
         self.tau = params[1]
         self.params = params
-        self.scale = [0.5, 5]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -123,7 +121,6 @@ class ConstantKernel:
         """
         self.c = params[0]
         self.params = params
-        self.scale = [1]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -169,7 +166,6 @@ class DotProductKernel:
         Initializes the Dot Product Kernel.
         """
         self.c = 0
-        self.scale = [1]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self):
@@ -216,7 +212,6 @@ class Matern32Kernel:
         self.A = params[0]
         self.l = params[1]
         self.params = params
-        self.scale = [0.5, 5]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -272,7 +267,6 @@ class Matern52Kernel:
         self.A = params[0]
         self.l = params[1]
         self.params = params
-        self.scale = [0.5, 5]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -332,7 +326,6 @@ class RationalQuadraticKernel:
         self.tau = params[1]
         self.scale_mixture = params[2]
         self.params = params
-        self.scale = [0.5, 5, 5]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -401,7 +394,6 @@ class GibbsKernel:
         self.mu = params[3]
         self.sigma = params[4]
         self.params = params
-        self.scale = [0.5, 5, 2, 5, 2]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -468,7 +460,6 @@ class OUKernel:
         self.A = params[0]
         self.l = params[1]
         self.params = params
-        self.scale = [0.5, 5]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -514,7 +505,6 @@ class PeriodicKernel:
         self.l = params[1]
         self.p = params[2]
         self.params = params
-        self.scale = [0]
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):
@@ -543,7 +533,6 @@ class JJKernel:
         self.m = params[2]
         self.b = params[3]
         self.params = params
-        self.scale = []
         self.covariance = jax.jit(self._covariance)
         
     def _reset(self, params):

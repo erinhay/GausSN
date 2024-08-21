@@ -29,7 +29,6 @@ class ConstantMagnification:
         self.deltas = jnp.array([0] + params[0::2])
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
-        self.scale = [1]
         self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
     def _reset(self, params):
