@@ -1,6 +1,5 @@
 import numpy as np
 import jax.numpy as jnp
-import sncosmo
 
 class UniformMean:
     """
@@ -47,29 +46,24 @@ class UniformMean:
 
 class sncosmoMean:
     """
-    Mean function for Gaussian processes based on sncosmo templates. This class works for all sncosmo templates which use the 'amp' and 't0' parameters.
+    Mean function for Gaussian processes based on sncosmo templates.
     """
-    def __init__(self, templatename, params, redshift=None):
+    def __init__(self, model, fixed=None):
         """
         Initializes the sncosmoMean function with given parameters.
 
         Args:
-            templatename (str): Name of the sncosmo template.
-            params (list): List containing parameters [redshift, t0, amp] or [t0, amp].
-                redshift (float, optional): Redshift of the source. Defaults to None.
+            model (sncosmo.Model instance): sncosmo model
+            fixed (array-like, optional): list of True/False indicating whether to fix each of the sncosmo model parameters, in the order given by model.param_names; defaults to fitting all parameters
         """
-        self.templatename = templatename
-        self.params = params
-        if len(params) > 2:
-            self.redshift = params[0]
-            self.t0 = params[1]
-            self.amp = params[2]
+        self.model = model
+        if fixed is None:
+            self.fixed = np.repeat(False, len(self.model.parameters))
+        elif len(fixed) != len(self.model.parameters):
+            raise IndexError("Array 'fixed' is not the correct length for given model. Please check the length of 'fixed' is equivalent to the length of model.param_names!")
         else:
-            self.redshift = redshift
-            self.t0 = params[0]
-            self.amp = params[1]
-        self.model = sncosmo.Model(source=self.templatename)
-        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
+            self.fixed = np.array(fixed)
+        self.params = np.array(self.model.parameters)[~self.fixed]
 
     def _reset(self, params):
         """
@@ -79,14 +73,12 @@ class sncosmoMean:
             params (list): List containing parameters [redshift, t0, amp] or [t0, amp].
         """
         self.params = params
-        if len(params) > 2:
-            self.redshift = params[0]
-            self.t0 = params[1]
-            self.amp = params[2]
-        else:
-            self.t0 = params[0]
-            self.amp = params[1]
-        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
+        params_dict = {np.array(self.model.param_names)[~self.fixed][k]: params[k] for k in range(len(self.params))}
+        try:
+            params_dict['x0'] = params_dict['x0']*1.e-8
+        except:
+            pass
+        self.model.update(params_dict)
 
     def mean(self, x, params=None, bands=None):
         """
@@ -100,158 +92,6 @@ class sncosmoMean:
 
         Returns:
             numpy.ndarray: Mean flux computed using the sncosmo model.
-        """
-        if params != None:
-            self._reset(params)
-
-        args = np.argsort(x)
-        revert_args = np.zeros(len(args), dtype=int)
-        revert_args[args] = np.arange(len(args))
-
-        reordered_x = x[args]
-        if len(bands) >= 2:
-            reordered_bands = bands[args]
-        else:
-            reordered_bands = bands
-
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
-
-        return flux[revert_args]
-
-class SALTMean:
-    """
-    Mean function for Gaussian processes based on SALT template, as implemented through sncosmo.
-    """
-    def __init__(self, templatename, params, redshift=None):
-        """
-        Initializes the SALTMean function with given parameters.
-
-        Args:
-            templatename (str): Name of the SALT template.
-            params (list): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
-                redshift (float, optional): Redshift of the source. Defaults to None.
-        """
-        self.templatename = templatename
-        self.params = params
-        if len(params) > 4:
-            self.redshift = params[0]
-            self.t0 = params[1]
-            self.x0 = params[2]
-            self.x1 = params[3]
-            self.c = params[4]
-        else:
-            self.redshift = redshift
-            self.t0 = params[0]
-            self.x0 = params[1]
-            self.x1 = params[2]
-            self.c = params[3]
-        self.model = sncosmo.Model(source=self.templatename)
-        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c)
-
-    def _reset(self, params):
-        """
-        Resets the mean function parameters.
-
-        Args:
-            params (list): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
-        """
-        self.params = params
-        if len(params) > 4:
-            self.redshift = params[0]
-            self.t0 = params[1]
-            self.x0 = params[2]
-            self.x1 = params[3]
-            self.c = params[4]
-        else:
-            self.t0 = params[0]
-            self.x0 = params[1]
-            self.x1 = params[2]
-            self.c = params[3]
-        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c)
-
-    def mean(self, x, params=None, bands=None):
-        """
-        Computes the mean flux using the SALT model.
-
-        Args:
-            x (numpy.ndarray): Input array of times.
-            params (list, optional): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
-                Defaults to None.
-            bands (list, optional): List of bands. Defaults to None.
-
-        Returns:
-            numpy.ndarray: Mean flux computed using the SALT model.
-        """
-        if params != None:
-            self._reset(params)
-
-        args = np.argsort(x)
-        revert_args = np.zeros(len(args), dtype=int)
-        revert_args[args] = np.arange(len(args))
-
-        reordered_x = x[args]
-        if len(bands) >= 2:
-            reordered_bands = bands[args]
-        else:
-            reordered_bands = bands
-
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
-
-        return flux[revert_args]
-    
-class ZwickyMean:
-    """
-    Mean function for Gaussian processes based on SALT template, as implemented through sncosmo.
-    """
-    def __init__(self, templatename, params, redshift=None):
-        """
-        Initializes the SALTMean function with given parameters.
-
-        Args:
-            templatename (str): Name of the SALT template.
-            params (list): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
-                redshift (float, optional): Redshift of the source. Defaults to None.
-        """
-        self.templatename = templatename
-        self.params = params
-        self.redshift = redshift
-        self.t0 = params[0]
-        self.x0 = params[1]
-        self.x1 = params[2]
-        self.c = params[3]
-        self.mwebv = 0.16
-        self.mwr_v = 3.1
-
-        dust = sncosmo.F99Dust(r_v=self.mwr_v)
-        self.model = sncosmo.Model(source=self.templatename, effects=[dust], effect_names=['mw'], effect_frames=['obs'])
-        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
-
-    def _reset(self, params):
-        """
-        Resets the mean function parameters.
-
-        Args:
-            params (list): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
-        """
-        self.params = params
-        self.t0 = params[0]
-        self.x0 = params[1]
-        self.x1 = params[2]
-        self.c = params[3]
-        self.model.set(z=self.redshift, t0=self.t0, x0=1.e-8*self.x0, x1=self.x1, c=self.c, mwebv=self.mwebv)
-
-    def mean(self, x, params=None, bands=None):
-        """
-        Computes the mean flux using the SALT model.
-
-        Args:
-            x (numpy.ndarray): Input array of times.
-            params (list, optional): List containing parameters [redshift, t0, x0, x1, c] or [t0, x0, x1, c].
-                Defaults to None.
-            bands (list, optional): List of bands. Defaults to None.
-
-        Returns:
-            numpy.ndarray: Mean flux computed using the SALT model.
         """
         if params != None:
             self._reset(params)

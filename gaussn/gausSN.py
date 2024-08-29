@@ -2,7 +2,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve_triangular
-from GausSN import lensingmodels
+from gaussn import lensingmodels
 try:
     from scipy.optimize import minimize
 except ImportError:
