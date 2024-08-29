@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from dynesty import plotting as dyplot
 
-from GausSN import gausSN
+from gaussn import gausSN
 
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
