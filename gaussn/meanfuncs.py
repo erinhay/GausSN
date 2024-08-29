@@ -1,6 +1,5 @@
 import numpy as np
 import jax.numpy as jnp
-import sncosmo
 
 class UniformMean:
     """
@@ -16,7 +15,6 @@ class UniformMean:
         """
         self.c = params[0]
         self.params = params
-        self.scale = [1]
         
     def _reset(self, params):
         """
@@ -48,29 +46,24 @@ class UniformMean:
 
 class sncosmoMean:
     """
-    Mean function for Gaussian processes based on sncosmo templates. This class works for all sncosmo templates which use the 'amp' and 't0' parameters.
+    Mean function for Gaussian processes based on sncosmo templates.
     """
-    def __init__(self, templatename, params, redshift=None):
+    def __init__(self, model, fixed=None):
         """
         Initializes the sncosmoMean function with given parameters.
 
         Args:
-            templatename (str): Name of the sncosmo template.
-            params (list): List containing parameters [redshift, t0, amp] or [t0, amp].
-                redshift (float, optional): Redshift of the source. Defaults to None.
+            model (sncosmo.Model instance): sncosmo model
+            fixed (array-like, optional): list of True/False indicating whether to fix each of the sncosmo model parameters, in the order given by model.param_names; defaults to fitting all parameters
         """
-        self.templatename = templatename
-        self.params = params
-        if len(params) > 2:
-            self.redshift = params[0]
-            self.t0 = params[1]
-            self.amp = params[2]
+        self.model = model
+        if fixed is None:
+            self.fixed = np.repeat(False, len(self.model.parameters))
+        elif len(fixed) != len(self.model.parameters):
+            raise IndexError("Array 'fixed' is not the correct length for given model. Please check the length of 'fixed' is equivalent to the length of model.param_names!")
         else:
-            self.redshift = redshift
-            self.t0 = params[0]
-            self.amp = params[1]
-        self.model = sncosmo.Model(source=self.templatename)
-        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
+            self.fixed = np.array(fixed)
+        self.params = np.array(self.model.parameters)[~self.fixed]
 
     def _reset(self, params):
         """
@@ -80,14 +73,12 @@ class sncosmoMean:
             params (list): List containing parameters [redshift, t0, amp] or [t0, amp].
         """
         self.params = params
-        if len(params) > 2:
-            self.redshift = params[0]
-            self.t0 = params[1]
-            self.amp = params[2]
-        else:
-            self.t0 = params[0]
-            self.amp = params[1]
-        self.model.set(z=self.redshift, t0=self.t0, amplitude=1.e-6*self.amp)
+        params_dict = {np.array(self.model.param_names)[~self.fixed][k]: params[k] for k in range(len(self.params))}
+        try:
+            params_dict['x0'] = params_dict['x0']*1.e-8
+        except:
+            pass
+        self.model.update(params_dict)
 
     def mean(self, x, params=None, bands=None, zp=None, zpsys=None):
         """
@@ -119,6 +110,7 @@ class sncosmoMean:
 
         return flux[revert_args]
 
+<<<<<<< HEAD
 class SALTMean:
     """
     Mean function for Gaussian processes based on SALT template, as implemented through sncosmo.
@@ -291,6 +283,8 @@ class ZwickyMean:
 
         return flux[revert_args]
 
+=======
+>>>>>>> origin/main
 class Sin:
     """
     Sinusoidal mean function for Gaussian processes.
@@ -309,7 +303,6 @@ class Sin:
         self.w = params[1]
         self.phi = params[2]
         self.params = params
-        self.scale = [0.25, 3, 10]
         
     def _reset(self, params):
         """
@@ -361,7 +354,6 @@ class Gaussian:
         self.mu = params[1]
         self.sigma = params[2]
         self.params = params
-        self.scale = [0.25, 5, 0.5]
         
     def _reset(self, params):
         """
@@ -412,7 +404,6 @@ class ExpFunction:
         self.A = params[0]
         self.tau = params[1]
         self.params = params
-        self.scale = [0.25, 5]
 
     def _reset(self, params):
         """
@@ -468,7 +459,6 @@ class Bazin2009:
         self.Tfall = params[3]
         self.Trise = params[4]
         self.params = params
-        self.scale = [0.25, 5, 10, 5, 5]
         
     def _reset(self, params):
         """
@@ -536,7 +526,6 @@ class Karpenka2012:
         self.Tfall = params[4]
         self.Trise = params[5]
         self.params = params
-        self.scale = [0.25, 5, 10, 10, 5, 5]
         
     def _reset(self, params):
         """
@@ -607,7 +596,6 @@ class Villar2019:
         self.Tfall = params[4]
         self.Trise = params[5]
         self.params = params
-        self.scale = [0.25, 5, 10, 10, 5, 5]
         
     def _reset(self, params):
         """
