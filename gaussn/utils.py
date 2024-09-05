@@ -34,7 +34,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     # Create subplots based on the number of unique bands
     fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(6, 2*len(np.unique(data['band']))), sharex=True)
 
-    data['band'] = [pb_id.lower() for pb_id in data['band']]
+    #data['band'] = [pb_id.lower() for pb_id in data['band']]
     if len(np.unique(data['band'])) > 1:
         # If there are multiple bands, iterate over each band
         bands = ordered[np.isin(ordered, data['band'])]
@@ -214,9 +214,11 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
             repeats = np.array([len(band[band['image'] == pb_id]) for pb_id in np.unique(data['image'])])
             lensingmodel.repeats = repeats
             lensingmodel.n_bands = 1
-            shifted_time_data, b_vector = lensingmodel._lens(jnp.array(band['time'].value))
+            lensingmodel.n_images = len(np.unique(data[data['image'] != 'unresolved']['image']))
+            lensingmodel.images = band['image']
+            shifted_time_data, b_vector = lensingmodel.lens(jnp.array(band['time'].value))
 
-            exp, cov = gp.predict(predict_times, shifted_time_data, band['flux']/b_vector, band['fluxerr']/b_vector, band = [pb_id])
+            exp, cov = gp.predict(predict_times, shifted_time_data, band['flux']/b_vector, band['fluxerr']/b_vector, band=[pb_id], zp=band['zp'], zpsys=band['zpsys'])
             
             # Plot predicted flux for each image
             for i in range(1):
