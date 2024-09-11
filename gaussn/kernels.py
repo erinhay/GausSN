@@ -248,7 +248,7 @@ class Matern32Kernel:
             x_prime = x
         
         r2 = (x[:, None] - x_prime[None, :])**2
-        K = self.A * ((1 + jnp.sqrt(3*r2)/self.l) * jnp.exp(-jnp.sqrt(3*r2)/self.l))
+        K = self.A**2 * ((1 + jnp.sqrt(3*r2)/self.l) * jnp.exp(-jnp.sqrt(3*r2)/self.l))
         return K
 
 class Matern52Kernel:
@@ -305,7 +305,7 @@ class Matern52Kernel:
         r2 = (x[:, None] - x_prime[None, :])**2
         a = 1 + (jnp.sqrt(5*r2)/self.l) + (5*r2/(3*(self.l**2)))
         b = -jnp.sqrt(5*r2)/self.l
-        K = self.A * a * jnp.exp(b)
+        K = self.A**2 * a * jnp.exp(b)
         return K
     
 class RationalQuadraticKernel:

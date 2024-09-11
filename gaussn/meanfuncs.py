@@ -75,7 +75,7 @@ class sncosmoMean:
         self.params = params
         params_dict = {np.array(self.model.param_names)[~self.fixed][k]: params[k] for k in range(len(self.params))}
         try:
-            params_dict['x0'] = params_dict['x0']*1.e-8
+            params_dict['x0'] = params_dict['x0']*1.e-9
         except:
             pass
         self.model.update(params_dict)
