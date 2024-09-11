@@ -1,0 +1,15 @@
+data/
+!data/glSN_forGP_sims
+!data/COSMOGRAIL
+
+ipynb/
+filters/
+outputs/
+fit*
+zwicky*
+*.log
+
+build/
+
+gaussn.egg-info/
+gaussn/__pycache__/*
