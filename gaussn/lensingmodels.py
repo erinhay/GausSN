@@ -396,18 +396,50 @@ class SigmoidMagnification:
         if params != None:
             self._reset(params)
 
-        delta_vector = jnp.tile(jnp.repeat(self.deltas, self.n_images), self.repeats)
-        beta0_vector = jnp.tile(jnp.repeat(self.beta0s, self.n_images), self.repeats)
-        beta1_vector = jnp.tile(jnp.repeat(self.beta1s, self.n_images), self.repeats)
-        r_vector = jnp.tile(jnp.repeat(self.rs, self.n_images), self.repeats)
-        t0_vector = jnp.tile(jnp.repeat(self.t0s, self.n_images), self.repeats)
+        resolved_b = None
+        unresolved_T = None
 
-        x = self._time_shift(x, delta_vector)
-        b = self._magnify(x, beta0_vector, beta1_vector, r_vector, t0_vector)
+        if len(self.repeats) > 0:
+            resolved_x = x[self.images != 'unresolved']
+            resolved_delta_vector = jnp.repeat(jnp.repeat(self.deltas, self.n_bands), self.repeats)
+            resolved_beta0_vector = jnp.repeat(jnp.repeat(self.beta0s, self.n_bands), self.repeats)
+            resolved_beta1_vector = jnp.repeat(jnp.repeat(self.beta1s, self.n_bands), self.repeats)
+            resolved_r_vector = jnp.repeat(jnp.repeat(self.rs, self.n_bands), self.repeats)
+            resolved_t0_vector = jnp.repeat(jnp.repeat(self.t0s, self.n_bands), self.repeats)
 
-        return x, b
+            shifted_resolved_x = self._time_shift(resolved_x, resolved_delta_vector)
+            resolved_b = self._magnify(shifted_resolved_x, resolved_beta0_vector, resolved_beta1_vector, resolved_r_vector, resolved_t0_vector)
 
-    def import_from_gp(self, kernel, meanfunc, bands, images, indices, repeats):
+        if 'unresolved' in self.images:
+            unresolved_x = x[self.images == 'unresolved']
+            unresolved_delta_vector = jnp.repeat(self.deltas, len(unresolved_x))
+            unresolved_beta0_vector = jnp.repeat(self.beta0s, len(unresolved_x))
+            unresolved_beta1_vector = jnp.repeat(self.beta1s, len(unresolved_x))
+            unresolved_r_vector = jnp.repeat(self.rs, len(unresolved_x))
+            unresolved_t0_vector = jnp.repeat(self.t0s, len(unresolved_x))
+
+            shifted_unresolved_x = self._time_shift(jnp.tile(unresolved_x, self.n_images), unresolved_delta_vector)
+            unresolved_b = self._magnify(shifted_unresolved_x, unresolved_beta0_vector, unresolved_beta1_vector, unresolved_r_vector, unresolved_t0_vector)
+
+            for m in range(self.n_images):
+                if m == 0:
+                    unresolved_T = jnp.diag(unresolved_b[m * len(unresolved_x) : (m+1) * len(unresolved_x)])
+                else:
+                    unresolved_T = jnp.hstack([unresolved_T, jnp.diag(unresolved_b[m * len(unresolved_x) : (m+1) * len(unresolved_x)])])
+
+        if resolved_b is not None and unresolved_T is not None:
+            shifted_x = jnp.concatenate([shifted_resolved_x, shifted_unresolved_x])
+            T = block_diag(jnp.diag(resolved_b), unresolved_T)
+        elif resolved_b is not None:
+            shifted_x = shifted_resolved_x
+            T = jnp.diag(resolved_b)
+        elif unresolved_T is not None:
+            shifted_x = shifted_unresolved_x
+            T = unresolved_T
+
+        return shifted_x, T
+
+    def import_from_gp(self, kernel, meanfunc, bands, images, n_images, indices, repeats):
         """
         Imports parameters from Gaussian process.
 
@@ -421,10 +453,10 @@ class SigmoidMagnification:
         """
         self.kernel = kernel
         self.meanfunc = meanfunc
-        self.bands = bands
-        self.n_bands = len(np.unique(bands))
         self.images = images
-        self.n_images = len(np.unique(images))
+        self.n_images = n_images
+        self.bands = bands
+        self.n_bands = len(np.unique(self.bands))
         self.indices = indices
         self.repeats = repeats
         self.mask = self._make_mask()
