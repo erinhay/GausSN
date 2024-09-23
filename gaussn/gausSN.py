@@ -156,7 +156,7 @@ class GP:
         shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
 
         # Compute the mean vector for the given input data points x
-        mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands, zp=self.repeated_for_unresolved_zp, zpsys=self.repeated_for_unresolved_zpsys)
+        mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands, images=self.repeated_for_unresolved_images, zp=self.repeated_for_unresolved_zp, zpsys=self.repeated_for_unresolved_zpsys)
         self.mean = jnp.matmul(transform_matrix, mean)
         
         # Compute the covariance matrix K for the given input data points x
@@ -304,7 +304,7 @@ class GP:
         else:
             self.y, self.yerr = jnp.array(y), jnp.array(yerr)
         self.bands = band
-        self.images = image
+        self.images = np.array(image)
         
         # Store n_bands, n_images, and indices information
         self._prepare_indices(self.x, band, image, n_images)
@@ -312,6 +312,9 @@ class GP:
 
         repeated_for_unresolved_bands = np.tile(band[image == 'unresolved'], self.n_images - 1)
         self.repeated_for_unresolved_bands = np.concatenate([self.bands, repeated_for_unresolved_bands])
+
+        repeated_for_unresolved_images = np.repeat(np.unique(self.images[self.images != 'unresolved']), len(self.images[self.images == 'unresolved']))
+        self.repeated_for_unresolved_images = np.concatenate([self.images[self.images != 'unresolved'], repeated_for_unresolved_images])
 
         if isinstance(zp, float):
             repeated_zp = np.repeat(zp, len(self.x))
@@ -343,7 +346,7 @@ class GP:
             logprior = self.logprior
             
         # Compute mean and covariance given the specified mean function and kernel with their initial parameters
-        self.mean = self.meanfunc.mean(self.x, bands=self.bands, zp=repeated_zp, zpsys=repeated_zpsys)
+        self.mean = self.meanfunc.mean(self.x, bands=self.bands, images=self.images, zp=repeated_zp, zpsys=repeated_zpsys)
         self.cov = self.kernel.covariance(self.x)
         
         if method == 'dynesty':
@@ -392,7 +395,7 @@ class GP:
             sampler.run_mcmc(p0, nsteps=nsteps, **run_sampler_kwargs)
             return sampler
     
-    def predict(self, x_prime, x, y, yerr, band, zp, zpsys):
+    def predict(self, x_prime, x, y, yerr, band, image, zp, zpsys):
         """
         Predict function values at new locations given observed data.
         
@@ -427,8 +430,8 @@ class GP:
 
         cov_UU = self.kernel.covariance(x_prime)
 
-        mu_U = self.meanfunc.mean(x_prime, bands=band, zp=zp, zpsys=zpsys)
-        mu_V = self.meanfunc.mean(x, bands=band, zp=zp, zpsys=zpsys)
+        mu_U = self.meanfunc.mean(x_prime, bands=band, images=image, zp=zp, zpsys=zpsys)
+        mu_V = self.meanfunc.mean(x, bands=band, images=image, zp=zp, zpsys=zpsys)
         
         expectation = mu_U + (cov_UV @ np.linalg.solve(cov_VV, y-mu_V))
         variance = cov_UU - (cov_UV @ np.linalg.solve(cov_VV, np.transpose(cov_UV)))

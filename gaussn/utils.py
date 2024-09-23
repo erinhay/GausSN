@@ -163,7 +163,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     samples = results.samples_equal()
 
     # Iterate over random samples from the posterior
-    for iter in np.random.choice(len(samples), 200):
+    for iter in np.random.choice(len(samples), 100):
         sample = samples[iter]
 
         # Reset parameters based on whether they are fixed
@@ -218,7 +218,8 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
             lensingmodel.images = band['image']
             shifted_time_data, b_vector = lensingmodel.lens(jnp.array(band['time'].value))
 
-            exp, cov = gp.predict(predict_times, shifted_time_data, band['flux']/b_vector, band['fluxerr']/b_vector, band=[pb_id], zp=band['zp'], zpsys=band['zpsys'])
+            exp, cov = gp.predict(predict_times, shifted_time_data, band['flux']/np.diag(b_vector), band['fluxerr']/np.diag(b_vector),
+                                  band=[pb_id], image=band['image'], zp=band['zp'], zpsys=band['zpsys'])
             
             # Plot predicted flux for each image
             for i in range(1):
@@ -234,7 +235,8 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                     repeats = np.zeros(len(np.unique(data['image'])), dtype='int')
                     repeats[m] = int(len(predict_times))
                     lensingmodel.repeats = repeats
-                    _, b_vector_predict = lensingmodel._lens(jnp.array(predict_times))
+                    lensingmodel.images = np.repeat(im_id, len(predict_times))
+                    _, b_vector_predict = lensingmodel.lens(jnp.array(predict_times))
 
                     ax[b].plot(predict_times + lensingmodel.deltas[m], y_vals[0] * b_vector_predict, color=color, alpha=0.02, zorder=2)
     
