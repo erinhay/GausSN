@@ -237,7 +237,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
 
                 exp = mu_U + (cov_UV @ np.linalg.solve(cov_VV, y-mu_V))
                 cov = cov_UU - (cov_UV @ np.linalg.solve(cov_VV, np.transpose(cov_UV)))
-            
+         
                 for i in range(1):
                     beta_realization = np.random.multivariate_normal(mean=exp, cov=cov, size=1)
                     
@@ -249,7 +249,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                     ax[b*2].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
                     #ax[b*2].plot(predict_times, template_predict, color='red', zorder=2)
                     ax[(b*2)+1].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
-    
+ 
     # Add legend, xlabel, title, and adjust plot limits
     ax[0].legend(loc='upper right')
     ax[-1].set_xlabel('Time [days]', fontsize=16)
