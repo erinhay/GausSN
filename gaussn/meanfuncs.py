@@ -167,7 +167,7 @@ class sncosmoMean:
                 reordered_zpsys = zpsys[args]
             else:
                 reordered_zpsys = zpsys
-
+                
             flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)[revert_args]
 
         return flux
