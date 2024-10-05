@@ -107,7 +107,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
 
 def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, predict_times = np.linspace(-30, 110, 50), color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}, color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title=''):
     """
-    Plots the fitted glSN with uncertainties.
+    Plots the fitted glSN with uncertainties, assuming the GausSN2 model. ONLY WORKS FOR RESOLVED RN!
 
     Args:
         data (Table): Data containing flux measurements.
@@ -130,7 +130,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     bands = ordered[np.isin(ordered, data['band'])]
 
     # Create subplots based on the number of unique bands
-    fig, ax = plt.subplots(len(np.unique(data['band'])), 1, figsize=(8, 3*len(np.unique(bands))), sharex=True)
+    fig, ax = plt.subplots(2*len(np.unique(data['band'])), 1, figsize=(8, 2*(2*len(np.unique(bands)))), sharex=True)
 
     # Plot flux measurements for each band and image
     for b, pb_id in enumerate(bands):
@@ -160,9 +160,10 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                 marker = marker_dict_temp
 
             image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
-            ax[b].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label, zorder=1)
+            ax[b*2].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label, zorder=1)
         band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'WFI', 'EulerCAM']) else pb_id
-        ax[b].set_ylabel(band_label, fontsize=16)
+        ax[b*2].set_ylabel(band_label, fontsize=16)
+        ax[(b*2)+1].set_ylabel('$\\beta(t)$', fontsize=16)
 
     # Get equal-weighted samples from the results
     samples = results.samples_equal()
@@ -206,8 +207,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
         
         # Create GP object
         gp = gausSN.GP(kernel, meanfunc, lensingmodel)
-        
-        # Predict flux for each band
+
         for b, pb_id in enumerate(bands):
             band = data[data['band'] == pb_id]
 
@@ -216,34 +216,39 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
             except:
                 color_dict_fit_temp = color_dict_fit
 
-            repeats = np.array([len(band[band['image'] == pb_id]) for pb_id in np.unique(data['image'])])
-            lensingmodel.repeats = repeats
-            lensingmodel.n_bands = 1
-            lensingmodel.n_images = len(np.unique(data[data['image'] != 'unresolved']['image']))
-            lensingmodel.images = band['image']
-            shifted_time_data, b_vector = lensingmodel.lens(jnp.array(band['time'].value))
+            for m, im_id in enumerate(['image_1', 'image_2']):
+                image = band[band['image'] == im_id]
 
-            exp, cov = gp.predict(predict_times, shifted_time_data, band['flux']/np.diag(b_vector), band['fluxerr']/np.diag(b_vector),
-                                  band=[pb_id], image=band['image'], zp=band['zp'], zpsys=band['zpsys'])
+                x = np.subtract(image['time'], gp.lensingmodel.deltas[m])
+                template = gp.meanfunc.mean(x, bands=[pb_id], zp=[band['zp'][0]], zpsys=[band['zpsys'][0]])
+                y = image['flux'] / np.multiply(gp.lensingmodel.betas[m], template)
+                yerr = image['fluxerr'] / np.multiply(gp.lensingmodel.betas[m], template)
+
+                predict_x = np.subtract(predict_times, gp.lensingmodel.deltas[m])
+                template_predict = np.multiply(gp.lensingmodel.betas[m],
+                                               gp.meanfunc.mean(predict_x, bands=[pb_id], zp=[band['zp'][0]], zpsys=[band['zpsys'][0]]))
+
+                mu_U = np.repeat(1., len(predict_times))
+                mu_V = np.repeat(1., len(image))
+
+                cov_UU = gp.kernel.covariance(predict_x)
+                cov_UV = gp.kernel.covariance(predict_x, x_prime=x)
+                cov_VV = gp.kernel.covariance(x) + np.diagflat(yerr**2)
+
+                exp = mu_U + (cov_UV @ np.linalg.solve(cov_VV, y-mu_V))
+                cov = cov_UU - (cov_UV @ np.linalg.solve(cov_VV, np.transpose(cov_UV)))
             
-            # Plot predicted flux for each image
-            for i in range(1):
-                y_vals = np.random.multivariate_normal(mean=exp, cov=cov, size=1)
-
-                for m, im_id in enumerate(np.unique(data['image'])):
+                for i in range(1):
+                    beta_realization = np.random.multivariate_normal(mean=exp, cov=cov, size=1)
                     
                     try:
                         color = color_dict_fit_temp[im_id]
                     except:
                         color = color_dict_fit_temp
 
-                    repeats = np.zeros(len(np.unique(data['image'])), dtype='int')
-                    repeats[m] = int(len(predict_times))
-                    lensingmodel.repeats = repeats
-                    lensingmodel.images = np.repeat(im_id, len(predict_times))
-                    _, b_vector_predict = lensingmodel.lens(jnp.array(predict_times))
-
-                    ax[b].plot(predict_times + lensingmodel.deltas[m], y_vals[0] * b_vector_predict, color=color, alpha=0.02, zorder=2)
+                    ax[b*2].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
+                    #ax[b*2].plot(predict_times, template_predict, color='red', zorder=2)
+                    ax[(b*2)+1].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
     
     # Add legend, xlabel, title, and adjust plot limits
     ax[0].legend(loc='upper right')
@@ -251,7 +256,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     ax[0].set_title(title, fontsize=24)
 
     # Set ylabel for the flux and adjust subplot spacing
-    fig.supylabel('Flux', fontsize=20, y=0.494)
+    fig.supylabel('Flux', fontsize=20)
     fig.tight_layout()
     fig.subplots_adjust(hspace=0)
     return fig, ax

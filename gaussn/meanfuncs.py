@@ -112,7 +112,7 @@ class sncosmoMean:
             pass
         self.model.update(params_dict)
 
-    def mean(self, x, params=None, bands=None, images=None, zp=None, zpsys=None):
+    def mean(self, x, params=None, bands=None, images=None, zp=27.5, zpsys='ab'):
         """
         Computes the mean flux using the sncosmo model.
 
@@ -158,7 +158,17 @@ class sncosmoMean:
             else:
                 reordered_bands = bands
 
-            flux = self.model.bandflux(reordered_bands, reordered_x, zp=zp, zpsys=zpsys)[revert_args]
+            if len(zp) >= 2:
+                reordered_zp = zp[args]
+            else:
+                reordered_zp = zp
+
+            if len(zpsys) >= 2:
+                reordered_zpsys = zpsys[args]
+            else:
+                reordered_zpsys = zpsys
+
+            flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)[revert_args]
 
         return flux
 

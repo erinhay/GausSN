@@ -317,6 +317,9 @@ class GP:
         repeated_for_unresolved_images = np.repeat(np.unique(self.images[self.images != 'unresolved']), len(self.images[self.images == 'unresolved']))
         self.repeated_for_unresolved_images = np.concatenate([self.images[self.images != 'unresolved'], repeated_for_unresolved_images])
 
+        repeated_for_mask_images = np.tile(image[image == 'unresolved'], self.n_images - 1)
+        self.repeated_for_mask_images = np.concatenate([self.images, repeated_for_mask_images])
+
         if isinstance(zp, float):
             repeated_zp = np.repeat(zp, len(self.x))
         else:
@@ -330,6 +333,11 @@ class GP:
             repeated_zpsys = zpsys
         repeated_for_unresolved_zpsys = np.tile(repeated_zpsys[image == 'unresolved'], self.n_images - 1)
         self.repeated_for_unresolved_zpsys = np.concatenate([repeated_zpsys, repeated_for_unresolved_zpsys])
+
+        try:
+            self.lensingmodel.mask = self.lensingmodel.make_mask(self.repeated_for_unresolved_bands, self.repeated_for_mask_images)
+        except:
+            pass
 
         # Determine the number of dimensions for optimization/sampling
         self.ndim = 0
@@ -347,6 +355,8 @@ class GP:
             self.loglikelihood = loglikelihood
         if logprior == None:
             logprior = self.logprior
+        else:
+            self.logprior = logprior
             
         # Compute mean and covariance given the specified mean function and kernel with their initial parameters
         self.mean = self.meanfunc.mean(self.x, bands=self.bands, images=self.images, zp=repeated_zp, zpsys=repeated_zpsys)
