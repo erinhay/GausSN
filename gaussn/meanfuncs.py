@@ -27,7 +27,7 @@ class UniformMean:
         self.c = params[0]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Uniform Mean function.
 
@@ -80,7 +80,7 @@ class sncosmoMean:
             pass
         self.model.update(params_dict)
 
-    def mean(self, x, params=None, bands=None):
+    def mean(self, x, params=None, bands=None, zp=27.5, zpsys='ab'):
         """
         Computes the mean flux using the sncosmo model.
 
@@ -106,7 +106,17 @@ class sncosmoMean:
         else:
             reordered_bands = bands
 
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=27.5, zpsys='ab')
+        if len(zp) >= 2:
+            reordered_zp = zp[args]
+        else:
+            reordered_zp = zp
+
+        if len(zpsys) >= 2:
+            reordered_zpsys = zpsys[args]
+        else:
+            reordered_zpsys = zpsys
+
+        flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)
 
         return flux[revert_args]
 
@@ -144,7 +154,7 @@ class Sin:
         self.phi = params[2]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the sinusoidal mean function.
 
@@ -195,7 +205,7 @@ class Gaussian:
         self.sigma = params[2]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Gaussian mean function.
 
@@ -243,7 +253,7 @@ class ExpFunction:
         self.tau = params[1]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Exponential mean function.
 
@@ -304,7 +314,7 @@ class Bazin2009:
         self.Trise = params[4]
         self.params = params
     
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Bazin (2009) mean function.
 
@@ -374,7 +384,7 @@ class Karpenka2012:
         self.Trise = params[5]
         self.params = params
     
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Karpenka (2012) mean function.
 
@@ -443,7 +453,7 @@ class Villar2019:
         self.Trise = params[5]
         self.params = params
         
-    def mean(self, y, params=None, bands=None):
+    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Villar (2019) mean function.
 

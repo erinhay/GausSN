@@ -139,7 +139,7 @@ class GP:
         shifted_x, b_vector = self.lensingmodel.lens(x, params=lensing_params)
 
         # Compute the mean vector for the given input data points x
-        self.mean = b_vector * self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.bands)
+        self.mean = b_vector * self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.bands, zp=self.zp, zpsys=self.zpsys)
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
@@ -205,7 +205,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band=None, image=None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, init_scale=1., minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
+    def optimize_parameters(self, x, y, yerr, band=None, image=None, zp=27.5, zpsys='ab', method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, init_scale=1., minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
@@ -279,6 +279,8 @@ class GP:
         else:
             self.y, self.yerr = jnp.array(y), jnp.array(yerr)
         self.bands = band
+        self.zp = zp
+        self.zpsys = zpsys
         
         # Store n_bands, n_images, and indices information
         self._prepare_indices(self.x, band, image)
@@ -300,8 +302,12 @@ class GP:
         # Set the loglikelihood/logprior to the default multi-variate normal likelihood specified within the GP class function, if not otherwise specified
         if loglikelihood == None:
             loglikelihood = self.loglikelihood
+        else:
+            self.loglikelihood = loglikelihood
         if logprior == None:
             logprior = self.logprior
+        else:
+            self.logprior = logprior
             
         # Compute mean and covariance given the specified mean function and kernel with their initial parameters
         self.mean = self.meanfunc.mean(self.x, bands=self.bands)
