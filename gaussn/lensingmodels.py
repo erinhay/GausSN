@@ -174,7 +174,6 @@ class GPMicrolensing:
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
         self.chromatic = chromatic
-        self.scale = [1]
         self.lens = jax.jit(self._lens)
         
     def _reset(self, params):
@@ -182,23 +181,23 @@ class GPMicrolensing:
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
         
-    def _make_mask(self):
+    def make_mask(self, bands, images):
         """
         Creates a mask to ensure each image and band are all treated independently based on the indices.
 
         Returns:
             numpy.ndarray: Mask matrix.
         """
-        mask = np.zeros((self.indices[-1], self.indices[-1]))
+        mask = np.zeros((len(bands), len(bands)))
         if self.chromatic:
-            for i in range(self.indices[-1]):
-                for j in range(self.indices[-1]):
-                    if self.bands[i] == self.bands[j] and self.images[i] == self.images[j]:
+            for i in range(len(bands)):
+                for j in range(len(bands)):
+                    if bands[i] == bands[j] and images[i] == images[j]:
                         mask[i,j] = 1
         else:
-            for i in range(self.indices[-1]):
-                for j in range(self.indices[-1]):
-                    if self.images[i] == self.images[j]:
+            for i in range(len(bands)):
+                for j in range(len(bands)):
+                    if images[i] == images[j]:
                         mask[i,j] = 1
         return mask
 
@@ -287,7 +286,6 @@ class GPMicrolensing:
         Args:
             n_bands (int): Number of bands.
             n_images (int): Number of images.
-            indices (numpy.ndarray): Indices.
 
         Returns:
             None
@@ -298,9 +296,7 @@ class GPMicrolensing:
         self.n_images = n_images
         self.bands = bands
         self.n_bands = len(np.unique(self.bands))
-        self.indices = indices
         self.repeats = repeats
-        self.mask = self._make_mask()
     
 class SigmoidMagnification:
     """
