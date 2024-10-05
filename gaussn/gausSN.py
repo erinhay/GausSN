@@ -158,12 +158,13 @@ class GP:
         # Compute the mean vector for the given input data points x
         mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands, zp=self.repeated_for_unresolved_zp, zpsys=self.repeated_for_unresolved_zpsys)
         self.mean = jnp.matmul(transform_matrix, mean)
+        M = transform_matrix * mean
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
         K = self.kernel.covariance(shifted_x, params=kernel_params)
-        K_transformed = jnp.matmul(jnp.matmul(transform_matrix, K), jnp.transpose(transform_matrix)) #replace with block diag math from chap 9 matrix cookbook
-        self.cov = jnp.multiply(self.lensingmodel.mask, K_transformed) + jnp.diag(yerr**2)
+        K_masked = jnp.multiply(self.lensingmodel.mask, K)
+        self.cov = jnp.matmul(jnp.matmul(M, K_masked), jnp.transpose(M)) + jnp.diag(yerr**2)
 
         # Compute the logarithm of the determinant of the covariance matrix
         L = jnp.linalg.cholesky(self.cov)
