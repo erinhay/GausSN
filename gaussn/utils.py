@@ -8,9 +8,14 @@ from gaussn import gausSN
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
 # Array specifying the order of bands in increasing wavelength
-ordered = np.array(['uvf475w', 'uvf625w', 'uvf814w', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'ps1::g', 'IOOg', 'lsstr', 'ztfr', 'ps1::r', 'IOOr',
-                    'lssti', 'ps1::i', 'IOOi', 'lsstz', 'IOOz', 'roman::Z', 'lssty', 'roman::Y', 'HAWKI_Y', 'roman::J', 'HAWKI_J',
-                    'roman::H', 'HAWKI_H', 'HAWKI_K', 'f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'EulerCAM', 'WFI'])
+ordered = np.array(['uvf475w', 'uvf625w', 'uvf814w', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'ps1::g', 'desg', 'IOOg',
+                    'lsstr', 'ztfr', 'ps1::r', 'desr', 'IOOr',
+                    'lssti', 'ps1::i', 'desi', 'IOOi',
+                    'lsstz', 'desz', 'IOOz', 'roman::Z',
+                    'lssty', 'roman::Y', 'HAWKI_Y', 'cspyd',
+                    'roman::J', 'HAWKI_J', 'cspjd',
+                    'roman::H', 'HAWKI_H', 'csphd',
+                    'HAWKI_K', 'f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'EulerCAM', 'WFI'])
 
 def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange', 'unresolved': 'k'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<', 'unresolved': '.'}, title='Gravitationally Lensed Supernova'):
     """

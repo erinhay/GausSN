@@ -339,6 +339,8 @@ class GP:
         # Set the loglikelihood/logprior to the default multi-variate normal likelihood specified within the GP class function, if not otherwise specified
         if loglikelihood == None:
             loglikelihood = self.loglikelihood
+        else:
+            self.loglikelihood = loglikelihood
         if logprior == None:
             logprior = self.logprior
             
