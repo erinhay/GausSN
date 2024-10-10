@@ -105,7 +105,11 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     fig.subplots_adjust(hspace=0)
     return fig, ax
 
-def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, predict_times = np.linspace(-30, 110, 50), color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}, color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title=''):
+def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False,
+                       predict_times = np.linspace(-20, 60, 50), N_iter=50,
+                       color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange', 'unresolved': 'k'},
+                       color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange', 'unresolved': 'dimgray'},
+                       marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<', 'unresolved': '.'}, title=''):
     """
     Plots the fitted glSN with uncertainties, assuming the GausSN2 model. ONLY WORKS FOR RESOLVED RN!
 
@@ -127,13 +131,15 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     """
 
     # Array specifying the order of bands
-    bands = ordered[np.isin(ordered, data['band'])]
+    unresolved_bands = ordered[np.isin(ordered, np.unique(data[data['image'] == 'unresolved']['band']))]
+    resolved_bands = ordered[np.isin(ordered, np.unique(data[data['image'] != 'unresolved']['band']))]
+    n_images = len(np.unique(data[data['image'] != 'unresolved']['image']))
 
     # Create subplots based on the number of unique bands
-    fig, ax = plt.subplots(2*len(np.unique(data['band'])), 1, figsize=(8, 2*(2*len(np.unique(bands)))), sharex=True)
+    fig, ax = plt.subplots(2*len(np.unique(data['band'])), 1, figsize=(8, 2 * ( 2 * (len(unresolved_bands) + len(resolved_bands)) ) ), sharex=True)
 
     # Plot flux measurements for each band and image
-    for b, pb_id in enumerate(bands):
+    for b, pb_id in enumerate(list(unresolved_bands)+list(resolved_bands)):
         band = data[data['band'] == pb_id]
 
         try:
@@ -169,7 +175,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     samples = results.samples_equal()
 
     # Iterate over random samples from the posterior
-    for iter in np.random.choice(len(samples), 10):
+    for iter in np.random.choice(len(samples), N_iter):
         sample = samples[iter]
 
         # Reset parameters based on whether they are fixed
@@ -208,7 +214,62 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
         # Create GP object
         gp = gausSN.GP(kernel, meanfunc, lensingmodel)
 
-        for b, pb_id in enumerate(bands):
+        for b, pb_id in enumerate(unresolved_bands):
+            band = data[data['band'] == pb_id]
+
+            try:
+                color_dict_fit_temp = color_dict_fit[pb_id]
+            except:
+                color_dict_fit_temp = color_dict_fit
+
+            repeated_times = np.tile(band['time'], n_images)
+            repeated_deltas = np.repeat(gp.lensingmodel.deltas, len(band))
+            repeated_betas = np.repeat(gp.lensingmodel.betas, len(band))
+            for m in range(n_images):
+                if m == 0:
+                    T = np.diag(repeated_betas[m * len(band) : (m+1) * len(band)])
+                else:
+                    T = np.hstack([T, np.diag(repeated_betas[m * len(band) : (m+1) * len(band)])])
+
+            x = np.subtract(repeated_times, repeated_deltas)
+            template = gp.meanfunc.mean(x, bands=[pb_id], zp=[band['zp'][0]], zpsys=[band['zpsys'][0]])
+            y = band['flux'] / np.matmul(T, template)
+            yerr = band['fluxerr'] / np.matmul(T, template)
+
+            repeated_predict_times = np.tile(predict_times, n_images)
+            repeated_predict_deltas = np.repeat(gp.lensingmodel.deltas, len(predict_times))
+            repeated_predict_betas = np.repeat(gp.lensingmodel.betas, len(predict_times))
+            for m in range(n_images):
+                if m == 0:
+                    predict_T = np.diag(repeated_predict_betas[m * len(predict_times) : (m+1) * len(predict_times)])
+                else:
+                    predict_T = np.hstack([predict_T, np.diag(repeated_predict_betas[m * len(predict_times) : (m+1) * len(predict_times)])])
+
+            predict_x = np.subtract(repeated_predict_times, repeated_predict_deltas)
+            template_predict = np.matmul(predict_T, gp.meanfunc.mean(predict_x, bands=[pb_id], zp=[band['zp'][0]], zpsys=[band['zpsys'][0]]))
+
+            mu_U = np.repeat(1., len(predict_times))
+            mu_V = np.repeat(1., len(band))
+
+            cov_UU = gp.kernel.covariance(predict_times)
+            cov_UV = gp.kernel.covariance(predict_times, x_prime=band['time'])
+            cov_VV = gp.kernel.covariance(band['time']) + np.diagflat(yerr**2)
+
+            exp = mu_U + (cov_UV @ np.linalg.solve(cov_VV, y-mu_V))
+            cov = cov_UU - (cov_UV @ np.linalg.solve(cov_VV, np.transpose(cov_UV)))
+
+            for i in range(1):
+                beta_realization = np.random.multivariate_normal(mean=exp, cov=cov, size=1)
+                    
+                try:
+                    color = color_dict_fit_temp['unresolved']
+                except:
+                    color = color_dict_fit_temp
+                
+                ax[b*2].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
+                ax[(b*2)+1].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
+
+        for b, pb_id in enumerate(resolved_bands):
             band = data[data['band'] == pb_id]
 
             try:
@@ -225,8 +286,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                 yerr = image['fluxerr'] / np.multiply(gp.lensingmodel.betas[m], template)
 
                 predict_x = np.subtract(predict_times, gp.lensingmodel.deltas[m])
-                template_predict = np.multiply(gp.lensingmodel.betas[m],
-                                               gp.meanfunc.mean(predict_x, bands=[pb_id], zp=[band['zp'][0]], zpsys=[band['zpsys'][0]]))
+                template_predict = np.multiply(gp.lensingmodel.betas[m], gp.meanfunc.mean(predict_x, bands=[pb_id], zp=[band['zp'][0]], zpsys=[band['zpsys'][0]]))
 
                 mu_U = np.repeat(1., len(predict_times))
                 mu_V = np.repeat(1., len(image))
@@ -246,9 +306,8 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                     except:
                         color = color_dict_fit_temp
 
-                    ax[b*2].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
-                    #ax[b*2].plot(predict_times, template_predict, color='red', zorder=2)
-                    ax[(b*2)+1].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
+                    ax[(b+len(unresolved_bands))*2].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
+                    ax[((b+len(unresolved_bands))*2)+1].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
     
     # Add legend, xlabel, title, and adjust plot limits
     ax[0].legend(loc='upper right')
