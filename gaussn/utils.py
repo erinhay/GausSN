@@ -74,7 +74,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
                 _, _, bars = ax[b].errorbar(image['time'], image[key], yerr=image[key+'err'], ls='None', marker=marker, color=color, label=image_label)
                 [bar.set_alpha(0.5) for bar in bars]
             # Set ylabel for the band
-            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'WFI', 'EulerCAM']) else pb_id
+            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
             ax[b].set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -91,7 +91,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
             _, _, bars = ax.errorbar(image['time'], image[key], yerr=image[key+'err'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label=image_label)
             [bar.set_alpha(0.5) for bar in bars]
         # Set ylabel for the single band
-        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'uvf475w', 'uvf625w', 'uvf814w', 'WFI', 'EulerCAM']) else pb_id
+        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
         ax.set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -167,7 +167,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
 
             image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
             ax[b*2].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label, zorder=1)
-        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'WFI', 'EulerCAM']) else pb_id
+        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
         ax[b*2].set_ylabel(band_label, fontsize=16)
         ax[(b*2)+1].set_ylabel('$\\beta(t)$', fontsize=16)
 

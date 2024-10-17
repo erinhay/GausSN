@@ -27,7 +27,7 @@ class UniformMean:
         self.c = params[0]
         self.params = params
         
-    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
+    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Uniform Mean function.
 
@@ -48,22 +48,55 @@ class sncosmoMean:
     """
     Mean function for Gaussian processes based on sncosmo templates.
     """
-    def __init__(self, model, fixed=None):
+    def __init__(self, model, fixed=None, differential_dust=False, n_images=None):
         """
         Initializes the sncosmoMean function with given parameters.
 
         Args:
             model (sncosmo.Model instance): sncosmo model
             fixed (array-like, optional): list of True/False indicating whether to fix each of the sncosmo model parameters, in the order given by model.param_names; defaults to fitting all parameters
+            differential_dust (bool, optional): fits for different line of sight dust effects . can only be used if sncosmo model is initialized with 'lens' dust propagation effect.
+            n_images (int, optional): if using differential dust, you must specify the number of images in the lensing system; defaults to None.
         """
         self.model = model
+        self.n_images = n_images
+        self.differential_dust = differential_dust
+
         if fixed is None:
             self.fixed = np.repeat(False, len(self.model.parameters))
         elif len(fixed) != len(self.model.parameters):
             raise IndexError("Array 'fixed' is not the correct length for given model. Please check the length of 'fixed' is equivalent to the length of model.param_names!")
         else:
             self.fixed = np.array(fixed)
-        self.params = np.array(self.model.parameters)[~self.fixed]
+
+        if self.differential_dust and 'lensz' not in self.model.param_names:
+            raise AttributeError("Differential dust requires that the sncosmo model be initialized with lens dust. Use sncosmo dust propogation effect with name 'lens' in frame 'free' for lens dust.")
+        elif self.differential_dust and 'lensebv' not in np.array(self.model.param_names)[~fixed]:
+            raise AttributeError("Differential dust requires that you fit for 'lensebv' (at least, you may also fit with 'lensr_v' free). Please make sure your 'fixed' array does not keep 'lensebv' fixed.")
+        elif self.differential_dust:
+            params = []
+            lens_ebv = []
+            lens_rv = []
+            for p in range(len(np.array(self.model.param_names)[~fixed])):
+                param_name = np.array(self.model.param_names)[~fixed][p]
+                if 'lens' in param_name:
+                    for i in range(self.n_images):
+                        params.append(np.array(self.model.parameters)[~fixed][p])
+                        if 'ebv' in param_name:
+                            lens_ebv.append(True)
+                            lens_rv.append(False)
+                        elif 'r_v' in param_name:
+                            lens_rv.append(True)
+                            lens_ebv.append(False)
+                else:
+                    params.append(self.model.parameters[p])
+                    lens_ebv.append(False)
+                    lens_rv.append(False)
+            self.params = np.array(params)
+            self.lens_ebv = np.array(lens_ebv)
+            self.lens_rv = np.array(lens_rv)
+        else:
+            self.params = np.array(self.model.parameters)[~self.fixed]
 
     def _reset(self, params):
         """
@@ -72,15 +105,14 @@ class sncosmoMean:
         Args:
             params (list): List containing parameters [redshift, t0, amp] or [t0, amp].
         """
-        self.params = params
-        params_dict = {np.array(self.model.param_names)[~self.fixed][k]: params[k] for k in range(len(self.params))}
+        params_dict = {np.array(self.model.param_names)[~self.fixed][k]: params[k] for k in range(len(params))}
         try:
             params_dict['x0'] = params_dict['x0']*1.e-9
         except:
             pass
         self.model.update(params_dict)
 
-    def mean(self, x, params=None, bands=None, zp=27.5, zpsys='ab'):
+    def mean(self, x, params=None, bands=None, images=None, zp=27.5, zpsys='ab'):
         """
         Computes the mean flux using the sncosmo model.
 
@@ -93,32 +125,51 @@ class sncosmoMean:
         Returns:
             numpy.ndarray: Mean flux computed using the sncosmo model.
         """
-        if params != None:
-            self._reset(params)
 
-        args = np.argsort(x)
-        revert_args = np.zeros(len(args), dtype=int)
-        revert_args[args] = np.arange(len(args))
+        if self.differential_dust:
+            
+            flux = np.zeros(len(x))
 
-        reordered_x = x[args]
-        if len(bands) >= 2:
-            reordered_bands = bands[args]
+            for i in range(self.n_images):
+                im_mask = images == 'image_'+str(np.arange(self.n_images)[i] + 1)
+
+                if params != None:
+                    im_params = list(np.array(params)[~self.lens_ebv][~self.lens_rv[~self.lens_ebv]])
+                    if len(np.array(params)[self.lens_rv]) > 0.:
+                        im_params.append(np.array(params)[self.lens_rv][i])
+                    if len(np.array(params)[self.lens_ebv]) > 0.:
+                        im_params.append(np.array(params)[self.lens_ebv][i])
+
+                    self._reset(np.array(im_params))
+
+                flux[im_mask] = self.model.bandflux(bands[im_mask], x[im_mask], zp=zp[im_mask], zpsys=zpsys[im_mask])
+
         else:
-            reordered_bands = bands
+            if params != None:
+                self._reset(params)
 
-        if len(zp) >= 2:
-            reordered_zp = zp[args]
-        else:
-            reordered_zp = zp
+            args = np.argsort(x)
+            revert_args = np.zeros(len(args), dtype=int)
+            revert_args[args] = np.arange(len(args))
 
-        if len(zpsys) >= 2:
-            reordered_zpsys = zpsys[args]
-        else:
-            reordered_zpsys = zpsys
+            reordered_x = x[args]
+            
+            if len(bands) >= 2:
+                reordered_bands = bands[args]
+            else:
+                reordered_bands = bands
+            if len(zp) >= 2:
+                reordered_zp = zp[args]
+            else:
+                reordered_zp = zp
+            if len(zpsys) >= 2:
+                reordered_zpsys = zpsys[args]
+            else:
+                reordered_zpsys = zpsys
+                
+            flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)[revert_args]
 
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)
-
-        return flux[revert_args]
+        return flux
 
 class Sin:
     """
@@ -154,7 +205,7 @@ class Sin:
         self.phi = params[2]
         self.params = params
         
-    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
+    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
         """
         Computes the mean value using the sinusoidal mean function.
 
@@ -205,7 +256,7 @@ class Gaussian:
         self.sigma = params[2]
         self.params = params
         
-    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
+    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Gaussian mean function.
 
@@ -253,7 +304,7 @@ class ExpFunction:
         self.tau = params[1]
         self.params = params
         
-    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
+    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Exponential mean function.
 
@@ -314,7 +365,7 @@ class Bazin2009:
         self.Trise = params[4]
         self.params = params
     
-    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
+    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Bazin (2009) mean function.
 
@@ -384,7 +435,7 @@ class Karpenka2012:
         self.Trise = params[5]
         self.params = params
     
-    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
+    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Karpenka (2012) mean function.
 
@@ -453,7 +504,7 @@ class Villar2019:
         self.Trise = params[5]
         self.params = params
         
-    def mean(self, y, params=None, bands=None, zp=None, zpsys=None):
+    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
         """
         Computes the mean value using the Villar (2019) mean function.
 

@@ -2,6 +2,7 @@ import numpy as np
 import jax.numpy as jnp
 import jax
 from jax.scipy.linalg import block_diag
+import sncosmo
 
 class NoLensing:
     """
@@ -161,7 +162,7 @@ class GPMicrolensing:
     For use with a SN template. Models time-varying magnification contributions as a deviation of each image's light curve away from the mean function.
     The GP draw is independent for each image and for each band, so it is capturing chromatic microlensing effects.
     """
-    def __init__(self, params, chromatic=True):
+    def __init__(self, params, chromatic=True, wave_eff_diff = 1.):
         """
         Initializes the class. There should be (N-1) time delays (delta) and magnifications (beta) for N images, inputted as [delta_1, beta_1, delta_2, beta_2, ...].
 
@@ -174,6 +175,7 @@ class GPMicrolensing:
         self.betas = jnp.array([1] + params[1::2])
         self.params = params
         self.chromatic = chromatic
+        self.wave_eff_diff = wave_eff_diff
         self.lens = jax.jit(self._lens)
         
     def _reset(self, params):
@@ -192,7 +194,7 @@ class GPMicrolensing:
         if self.chromatic:
             for i in range(len(bands)):
                 for j in range(len(bands)):
-                    if bands[i] == bands[j] and images[i] == images[j]:
+                    if np.fabs(sncosmo.get_bandpass(bands[i]).wave_eff - sncosmo.get_bandpass(bands[j]).wave_eff) < self.wave_eff_diff and images[i] == images[j]:
                         mask[i,j] = 1
         else:
             for i in range(len(bands)):
