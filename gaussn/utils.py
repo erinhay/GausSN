@@ -106,7 +106,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     return fig, ax
 
 def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False,
-                       predict_times = np.linspace(-20, 60, 50),
+                       predict_times = np.linspace(-20, 60, 50), N_iter=50,
                        color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange', 'unresolved': 'k'},
                        color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange', 'unresolved': 'dimgray'},
                        marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<', 'unresolved': '.'}, title=''):
@@ -175,7 +175,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     samples = results.samples_equal()
 
     # Iterate over random samples from the posterior
-    for iter in np.random.choice(len(samples), 50):
+    for iter in np.random.choice(len(samples), N_iter):
         sample = samples[iter]
 
         # Reset parameters based on whether they are fixed

@@ -194,7 +194,7 @@ class GPMicrolensing:
         if self.chromatic:
             for i in range(len(bands)):
                 for j in range(len(bands)):
-                    if np.fabs(sncosmo.get_bandpass(bands[i]).wave_eff - sncosmo.get_bandpass(bands[j]).wave_eff) < self.wave_eff_diff and images[i] == images[j]: #change to effective band? so g-band ztf and g-band HST are identical (effectively)
+                    if np.fabs(sncosmo.get_bandpass(bands[i]).wave_eff - sncosmo.get_bandpass(bands[j]).wave_eff) < self.wave_eff_diff and images[i] == images[j]:
                         mask[i,j] = 1
         else:
             for i in range(len(bands)):
