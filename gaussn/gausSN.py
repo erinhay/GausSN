@@ -360,7 +360,7 @@ class GP:
             
         # Compute mean and covariance given the specified mean function and kernel with their initial parameters
         self.mean = self.meanfunc.mean(self.x, bands=self.bands, images=self.images, zp=repeated_zp, zpsys=repeated_zpsys)
-        self.cov = self.kernel.covariance(self.x)
+        #self.cov = self.kernel.covariance(self.x)
         
         if method == 'dynesty':
                 

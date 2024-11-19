@@ -558,3 +558,58 @@ class JJKernel:
         K = self.A * jnp.exp(exponent)
         return K
         
+
+class ExpSquared2DKernel:
+    """
+    Exponentiated Squared Kernel for Gaussian processes.
+    """
+    def __init__(self, params):
+        """
+        Initializes the Exponentiated Squared Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
+        self.A = params[0]
+        self.tau = jnp.array([params[1], params[2]])
+        self.params = params
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
+        self.A = params[0]
+        self.tau = jnp.array([params[1], params[2]])
+        self.params = params
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Exponentiated Squared Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, tau] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Exponentiated Squared Kernel.
+        """
+        if params != None:
+            self._reset(params)
+
+        if x_prime is None:
+            x_prime = x
+
+        K = jnp.exp(-(x[:, :, None] - x_prime[:, None, :])**2/(2*self.tau[:, jnp.newaxis, jnp.newaxis]**2))
+        K = self.A**2 * (K[0] * K[1])#jnp.prod(K, axis=0)
+        return K
