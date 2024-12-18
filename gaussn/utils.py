@@ -267,6 +267,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                     color = color_dict_fit_temp
                 
                 ax[b*2].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
+                #ax[b*2].plot(predict_times, template_predict, color='tab:red', alpha=0.2, zorder=2)
                 ax[(b*2)+1].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
 
         for b, pb_id in enumerate(resolved_bands):
@@ -307,6 +308,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                         color = color_dict_fit_temp
 
                     ax[(b+len(unresolved_bands))*2].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
+                    #ax[(b+len(unresolved_bands))*2].plot(predict_times, template_predict, color='tab:red', alpha=0.2, zorder=2)
                     ax[((b+len(unresolved_bands))*2)+1].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
     
     # Add legend, xlabel, title, and adjust plot limits
