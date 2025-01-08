@@ -55,6 +55,7 @@ class ExpSquaredKernel:
         K = self.A**2 * jnp.exp(-(x[:, None] - x_prime[None, :])**2/(2*self.tau**2))
         return K
     
+
 class ExponentialKernel:
     """
     Exponential Kernel for Gaussian processes.
@@ -110,6 +111,7 @@ class ExponentialKernel:
         K = self.A**2 * jnp.exp(-vector_mag/self.tau)
         return K
 
+
 class ConstantKernel:
     def __init__(self, params):
         """
@@ -157,6 +159,7 @@ class ConstantKernel:
         K = jnp.ones([len(x), len(x_prime)]) * self.c
         return K
 
+
 class DotProductKernel:
     """
     Dot Product Kernel for Gaussian processes.
@@ -195,6 +198,7 @@ class DotProductKernel:
 
         K = jnp.dot(x[:, None], x_prime[None, :])
         return K
+
 
 class Matern32Kernel:
     """
@@ -250,6 +254,7 @@ class Matern32Kernel:
         r2 = (x[:, None] - x_prime[None, :])**2
         K = self.A**2 * ((1 + jnp.sqrt(3*r2)/self.l) * jnp.exp(-jnp.sqrt(3*r2)/self.l))
         return K
+
 
 class Matern52Kernel:
     """
@@ -308,6 +313,7 @@ class Matern52Kernel:
         K = self.A**2 * a * jnp.exp(b)
         return K
     
+
 class RationalQuadraticKernel:
     """
     Rational Quadratic Kernel for Gaussian processes.
@@ -366,6 +372,7 @@ class RationalQuadraticKernel:
         K = self.A**2 * (1 + (x[:, None] - x_prime[None, :])**2/(2*self.scale_mixture*self.tau**2))
         return K
     
+
 class GibbsKernel:
     """
     Gibbs Kernel for Gaussian processes.
@@ -447,6 +454,7 @@ class GibbsKernel:
         K = self.A**2 * jnp.sqrt(root_num/denom) * jnp.exp(-exp_num/denom)
         return K
     
+
 class OUKernel:
     def __init__(self, params):
         """
@@ -498,6 +506,7 @@ class OUKernel:
         r2 = (x[:, None] - x_prime[None, :])**2
         K = self.A * jnp.exp(-jnp.sqrt(r2) / self.l)
         return K
+
 
 class PeriodicKernel:
     def __init__(self, params):
@@ -558,3 +567,138 @@ class JJKernel:
         K = self.A * jnp.exp(exponent)
         return K
         
+
+class ExpSquared2DKernel:
+    """
+    Exponentiated Squared Kernel for Gaussian processes.
+    """
+    def __init__(self, params):
+        """
+        Initializes the Exponentiated Squared Kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
+        self.A = params[0]
+        self.tau = jnp.array([params[1], params[2]])
+        self.params = params
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau].
+            A (float): Amplitude parameter of the kernel.
+            tau (float): Length scale parameter of the kernel.
+        """
+        self.A = params[0]
+        self.tau = jnp.array([params[1], params[2]])
+        self.params = params
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Exponentiated Squared Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, tau] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Exponentiated Squared Kernel.
+        """
+        if params != None:
+            self._reset(params)
+
+        if x_prime is None:
+            x_prime = x
+
+        K = jnp.exp(-(x[:, :, None] - x_prime[:, None, :])**2/(2*self.tau[:, jnp.newaxis, jnp.newaxis]**2))
+        K = self.A**2 * (K[0] * K[1])#jnp.prod(K, axis=0)
+        return K
+    
+
+class ExpSquaredGibbs2DKernel:
+    """
+    Exponentiated Squared Kernel in wavelength dimension and Gibbs Kernel in time dimension for Gaussian processes.
+    """
+    def __init__(self, params):
+        """
+        Initializes the kernel with given parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau, lambda, p, mu, sigma].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
+        self.A = params[0]
+        self.tau = params[1]
+        self.lamdba = params[2]
+        self.p = params[3]
+        self.mu = params[4]
+        self.sigma = params[5]
+        self.params = params
+        self.covariance = jax.jit(self._covariance)
+        
+    def _reset(self, params):
+        """
+        Resets the kernel parameters.
+
+        Args:
+            params (list): List containing parameters [A, tau, lambda, p, mu, sigma].
+                A (float): Amplitude parameter of the kernel.
+                tau (float): Length scale parameter of the kernel.
+        """
+        self.A = params[0]
+        self.tau = params[1]
+        self.lamdba = params[2]
+        self.p = params[3]
+        self.mu = params[4]
+        self.sigma = params[5]
+        self.params = params
+        
+    def _covariance(self, x, x_prime=None, params=None):
+        """
+        Computes the covariance matrix using the Exponentiated Squared Kernel.
+
+        Args:
+            x (jax.numpy.ndarray): Input data matrix of shape (n_samples, n_features).
+            x_prime (jax.numpy.ndarray, optional): Second input data matrix of shape (n_samples, n_features).
+                Defaults to None, which means x_prime is set to x.
+            params (list, optional): List containing parameters [A, tau] to reset kernel parameters.
+                Defaults to None.
+
+        Returns:
+            jax.numpy.ndarray: Covariance matrix computed using the Exponentiated Squared Kernel.
+        """
+        if params != None:
+            self._reset(params)
+
+        if x_prime is None:
+            x_prime = x
+
+        time = x[0]
+        time_prime = x_prime[0]
+
+        normal_time = jnp.exp(-(time[:, None] - self.mu)**2 / (2*(self.sigma**2))) / (self.sigma * jnp.sqrt(2*jnp.pi))
+        normal_timeprime = jnp.exp(-(time_prime[None, :] - self.mu)**2 / (2*(self.sigma**2))) / (self.sigma * jnp.sqrt(2*jnp.pi))
+        tau_time = self.lamdba * (1 - (self.p * normal_time))
+        tau_timeprime = self.lamdba * (1 - (self.p * normal_timeprime))
+
+        root_num = 2 * tau_time * tau_timeprime
+        exp_num = (time[:, None] - time_prime[None, :])**2
+        denom = (tau_time**2) + (tau_timeprime**2)
+        time_K = jnp.sqrt(root_num/denom) * jnp.exp(-exp_num/denom)
+
+        wave = x[1]
+        wave_prime = x_prime[1]
+        wave_K = jnp.exp(-(wave[:, None] - wave_prime[None, :])**2/(2*self.tau**2))
+
+        K = self.A**2 * (wave_K * time_K)
+        return K
