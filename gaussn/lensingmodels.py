@@ -185,7 +185,7 @@ class GPMicrolensing:
         
     def make_mask(self, bands, images):
         """
-        Creates a mask to ensure each image and band are all treated independently based on the indices.
+        Creates a mask to ensure each image (and optionally band) are all treated independently based on the indices.
 
         Returns:
             numpy.ndarray: Mask matrix.

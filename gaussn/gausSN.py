@@ -314,8 +314,8 @@ class GP:
         repeated_for_unresolved_bands = np.tile(band[image == 'unresolved'], self.n_images - 1)
         self.repeated_for_unresolved_bands = np.concatenate([self.bands, repeated_for_unresolved_bands])
 
-        repeated_for_mask_images = np.tile(image[image == 'unresolved'], self.n_images - 1)
-        self.repeated_for_mask_images = np.concatenate([self.images, repeated_for_mask_images])
+        repeated_for_mask_images = np.repeat(['image_1', 'image_2'], len(image[image == 'unresolved']))
+        self.repeated_for_mask_images = np.concatenate([self.images[image != 'unresolved'], repeated_for_mask_images])
 
         repeated_for_unresolved_images = np.repeat(np.unique(self.images[self.images != 'unresolved']), len(self.images[self.images == 'unresolved']))
         self.repeated_for_unresolved_images = np.concatenate([self.images[self.images != 'unresolved'], repeated_for_unresolved_images])
