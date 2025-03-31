@@ -8,14 +8,15 @@ from gaussn import gausSN
 plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
 
 # Array specifying the order of bands in increasing wavelength
-ordered = np.array(['uvf475w', 'uvf625w', 'uvf814w', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'ps1::g', 'desg', 'IOOg',
+ordered = np.array(['uvf475w', 'uvf625w', 'uvf814w', 'B_CSP', 'V_CSP', 'lsstu',
+                    'lsstg', 'ztfg', 'ps1::g', 'desg', 'IOOg',
                     'lsstr', 'ztfr', 'ps1::r', 'desr', 'IOOr',
                     'lssti', 'ps1::i', 'desi', 'IOOi',
                     'lsstz', 'desz', 'IOOz', 'roman::Z',
-                    'lssty', 'roman::Y', 'HAWKI_Y', 'cspyd',
+                    'lssty', 'desy', 'roman::Y', 'HAWKI_Y', 'cspyd',
                     'roman::J', 'HAWKI_J', 'cspjd',
                     'roman::H', 'HAWKI_H', 'csphd',
-                    'HAWKI_K', 'f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'EulerCAM', 'WFI'])
+                    'HAWKI_K', 'f105w', 'f110w', 'f115w', 'f125w', 'f150w', 'f160w', 'f200w', 'f475w', 'EulerCAM', 'WFI'])
 
 def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange', 'unresolved': 'k'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<', 'unresolved': '.'}, title='Gravitationally Lensed Supernova'):
     """
@@ -74,7 +75,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
                 _, _, bars = ax[b].errorbar(image['time'], image[key], yerr=image[key+'err'], ls='None', marker=marker, color=color, label=image_label)
                 [bar.set_alpha(0.5) for bar in bars]
             # Set ylabel for the band
-            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
+            band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f115w', 'f125w', 'f150w', 'f160w', 'f200w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
             ax[b].set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -91,7 +92,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
             _, _, bars = ax.errorbar(image['time'], image[key], yerr=image[key+'err'], ls='None', marker=marker_dict[im_id], color=color_dict[im_id], label=image_label)
             [bar.set_alpha(0.5) for bar in bars]
         # Set ylabel for the single band
-        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
+        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f115w', 'f125w', 'f150w', 'f160w', 'f200w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
         ax.set_ylabel(band_label, fontsize=14)
 
         # Add legend and xlabel
@@ -102,6 +103,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     # Set ylabel for the flux and adjust subplot spacing
     fig.supylabel('Flux', fontsize=20, y=0.494)
     fig.tight_layout()
+    fig.align_labels()
     fig.subplots_adjust(hspace=0)
     return fig, ax
 
@@ -136,7 +138,8 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     n_images = len(np.unique(data[data['image'] != 'unresolved']['image']))
 
     # Create subplots based on the number of unique bands
-    fig, ax = plt.subplots(2*len(np.unique(data['band'])), 1, figsize=(8, 2 * ( 2 * (len(unresolved_bands) + len(resolved_bands)) ) ), sharex=True)
+    fig, ax = plt.subplots(2*len(np.unique(data['band'])), 2, figsize=(8, 1.5 * ( 2 * (len(unresolved_bands) + len(resolved_bands)) ) ),
+                           sharex=True, gridspec_kw={'height_ratios': np.tile([3, 2], len(np.unique(data['band'])))}, sharey='row')
 
     # Plot flux measurements for each band and image
     for b, pb_id in enumerate(list(unresolved_bands)+list(resolved_bands)):
@@ -152,7 +155,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
         except:
             marker_dict_temp = marker_dict
 
-        for im_id in np.unique(data['image']):
+        for m, im_id in enumerate(np.unique(data['image'])):
             image = band[band['image'] == im_id]
 
             try:
@@ -166,10 +169,10 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                 marker = marker_dict_temp
 
             image_label = 'Image '+im_id[-1] if not im_id == 'unresolved' else im_id
-            ax[b*2].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label, zorder=1)
-        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f125w', 'f160w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
-        ax[b*2].set_ylabel(band_label, fontsize=16)
-        ax[(b*2)+1].set_ylabel('$\\beta(t)$', fontsize=16)
+            ax[b*2,m].errorbar(image['time'], image['flux'], yerr=image['fluxerr'], ls='None', marker=marker, color=color, label=image_label, zorder=1)
+        band_label = pb_id[-1] + ' band' if not np.isin(pb_id, ['f105w', 'f110w', 'f115w', 'f125w', 'f150w', 'f160w', 'f200w', 'f475w', 'uvf475w', 'uvf625w', 'uvf814w', 'cspyd', 'cspjd', 'csphd', 'WFI', 'EulerCAM']) else pb_id
+        ax[b*2,0].set_ylabel(band_label, fontsize=16)
+        ax[(b*2)+1,0].set_ylabel('$\\beta(t)$', fontsize=16)
 
     # Get equal-weighted samples from the results
     samples = results.samples_equal()
@@ -307,18 +310,22 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                     except:
                         color = color_dict_fit_temp
 
-                    ax[(b+len(unresolved_bands))*2].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
+                    ax[(b+len(unresolved_bands))*2,m].plot(predict_times, beta_realization[0]*template_predict, color=color, alpha=0.2, zorder=2)
                     #ax[(b+len(unresolved_bands))*2].plot(predict_times, template_predict, color='tab:red', alpha=0.2, zorder=2)
-                    ax[((b+len(unresolved_bands))*2)+1].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
+                    ax[((b+len(unresolved_bands))*2)+1,m].plot(predict_times, beta_realization[0], color=color, alpha=0.2)
     
     # Add legend, xlabel, title, and adjust plot limits
-    ax[0].legend(loc='upper right')
-    ax[-1].set_xlabel('Time [days]', fontsize=16)
-    ax[0].set_title(title, fontsize=24)
+    #ax[0,0].legend(loc='upper right')
+    ax[-1,0].set_xlabel('Time [days]', fontsize=16)
+    ax[-1,1].set_xlabel('Time [days]', fontsize=16)
+    ax[0,0].set_title('Image 1', fontsize=16)
+    ax[0,1].set_title('Image 2', fontsize=16)
+    fig.suptitle(title, fontsize=24)
 
     # Set ylabel for the flux and adjust subplot spacing
     fig.supylabel('Flux', fontsize=20)
     fig.tight_layout()
+    fig.align_labels()
     fig.subplots_adjust(hspace=0)
     return fig, ax
 

@@ -221,6 +221,53 @@ class Sin:
         if params != None:
             self._reset(params)
         return self.A * np.sin((y*self.w) + self.phi)
+
+class Linear:
+    """
+    Linear mean function for Gaussian processes.
+    """
+    def __init__(self, params):
+        """
+        Initializes the Sinusoidal mean function with given parameters.
+
+        Args:
+            params (list): List containing parameters [a, b].
+                a (float): slope parameter of the linear function.
+                b (float): y-intercept parameter of the linear function.
+        """
+        self.a = params[0]
+        self.b = params[1]
+        self.params = params
+        
+    def _reset(self, params):
+        """
+        Resets the sinusoidal mean function parameters.
+
+        Args:
+            params (list): List containing parameters [A, w, phi].
+                a (float): slope parameter of the linear function.
+                b (float): y-intercept parameter of the linear function.
+        """
+        self.a = params[0]
+        self.b = params[1]
+        self.params = params
+        
+    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
+        """
+        Computes the mean value using the sinusoidal mean function.
+
+        Args:
+            y (numpy.ndarray): Input data.
+            params (list, optional): List containing parameters [A, w, phi] to reset mean function parameters.
+                Defaults to None.
+            bands: Not used in this function.
+
+        Returns:
+            numpy.ndarray: Mean value computed using the sinusoidal mean function.
+        """
+        if params != None:
+            self._reset(params)
+        return (self.a*y) + self.b
     
 class Gaussian:
     """
