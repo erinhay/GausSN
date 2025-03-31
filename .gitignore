@@ -5,6 +5,7 @@ data/
 ipynb/
 filters/
 outputs/
+sncosmo/
 fit*
 zwicky*
 *.log
