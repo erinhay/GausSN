@@ -16,7 +16,7 @@ ordered = np.array(['uvf475w', 'uvf625w', 'uvf814w', 'B_CSP', 'V_CSP', 'lsstu',
                     'lssty', 'desy', 'roman::Y', 'HAWKI_Y', 'cspyd',
                     'roman::J', 'HAWKI_J', 'cspjd',
                     'roman::H', 'HAWKI_H', 'csphd',
-                    'HAWKI_K', 'f105w', 'f110w', 'f115w', 'f125w', 'f150w', 'f160w', 'f200w', 'f475w', 'EulerCAM', 'WFI'])
+                    'HAWKI_K', 'f070w', 'f090w', 'f105w', 'f110w', 'f115w', 'f125w', 'f150w', 'f160w', 'f200w', 'f277w', 'f356w', 'f475w', 'EulerCAM', 'WFI'])
 
 def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'darkorange', 'unresolved': 'k'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<', 'unresolved': '.'}, title='Gravitationally Lensed Supernova'):
     """
