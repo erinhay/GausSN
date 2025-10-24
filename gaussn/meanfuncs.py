@@ -142,7 +142,10 @@ class sncosmoMean:
 
                     self._reset(np.array(im_params))
 
-                flux[im_mask] = self.model.bandflux(bands[im_mask], x[im_mask], zp=zp[im_mask], zpsys=zpsys[im_mask])
+                convert_indices = np.argsort(x[im_mask])
+                revert_indices = np.argsort(convert_indices)
+                flux[im_mask] = self.model.bandflux(bands[im_mask][convert_indices], x[im_mask][convert_indices],
+                                                    zp=zp[im_mask][convert_indices], zpsys=zpsys[im_mask][convert_indices])[revert_indices]
 
         else:
             if params != None:
