@@ -505,8 +505,6 @@ class GP:
                 raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel and mean function were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
 
             nwalkers = sampler_kwargs.pop('nwalkers', 24)
-            nsteps = run_sampler_kwargs.pop('nsteps', 1000)
-
             # Initialize walkers with random initial positions around the initial guess
             if p0 is None:
                 p0 = np.random.normal(init_pos, init_scale, size=(nwalkers, self.ndim))
@@ -515,12 +513,9 @@ class GP:
                     p0[r] = np.random.normal(init_pos, 0.001)
             
             if method == 'emcee':
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
                 sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
 
             if method == 'zeus':
-                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
-
                 sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
 
 
