@@ -69,38 +69,54 @@ class GP:
             self.lensingmodel = lensingmodel
         else:
             self.lensingmodel = lensingmodels.NoLensing()
-        self.jit_loglikelihood = jax.jit(self.loglikelihood)
         
-    def _prepare_indices(self, x, band, image):
+    def _prepare_indices(self, x, band, image, n_images):
         """
         Prepare indices for multi-band/multi-image data.
         """
         self.n_bands = len(np.unique(band))
-        self.n_images = len(np.unique(image))
+
+        if np.all(image == 'unresolved'): 
+            if n_images is None:
+                raise ValueError("If fitting only unresolved data, you must provide the n_images parameter. Please set the number of images are present in the unresolved light curves.")
+            else:
+                self.n_images = n_images
+        else:
+            self.n_images = len(np.unique(image[image != 'unresolved']))
         
         # Store indices information
-        indices = [0]
-        if band is not None:
-            for j, pb_id in enumerate(np.unique(band)):
-                specified_band = band[band == pb_id]
-                if image is not None:
-                    for i, im_id in enumerate(np.unique(image)):
-                        specified_image = specified_band[image[band == pb_id] == im_id]
-                        indices.append(len(specified_image) + indices[-1])
+        no_unresolved_indices = [0]
+        with_unresolved_indices = [0]
+        if image is not None:
+            for im_id in np.unique(image):
+                specified_image = image[image == im_id]
+                if band is not None:
+                    for pb_id in np.unique(band):
+                        specified_band = specified_image[band[image == im_id] == pb_id]
+
+                        with_unresolved_indices.append(len(specified_band) + with_unresolved_indices[-1])
+                        if im_id != 'unresolved':
+                            no_unresolved_indices.append(len(specified_band) + no_unresolved_indices[-1])
                 else:
-                    indices.append(len(specified_band) + indices[-1])
+                    with_unresolved_indices.append(len(specified_band) + with_unresolved_indices[-1])
+                    if im_id != 'unresolved':
+                        no_unresolved_indices.append(len(specified_band) + no_unresolved_indices[-1])
+
         else:
-            if image is not None:
-                for i, im_id in enumerate(np.unique(image)):
-                    specified_image = image[image == im_id]
-                    indices.append(len(specified_image) + indices[-1])
+            if band is not None:
+                for pb_id in np.unique(band):
+                    specified_band = band[band == pb_id]
+                    with_unresolved_indices.append(len(specified_band) + with_unresolved_indices[-1])
+                    no_unresolved_indices.append(len(specified_band) + no_unresolved_indices[-1])
             else:
-                indices.append(len(x) + indices[-1])
-        
-        self.indices = jnp.array(indices)
+                with_unresolved_indices.append(len(x) + with_unresolved_indices[-1])
+                no_unresolved_indices.append(len(x) + no_unresolved_indices[-1])
+
+        self.indices = jnp.array(with_unresolved_indices)
+        self.repeats = jnp.array(no_unresolved_indices)[1:]-jnp.array(no_unresolved_indices)[:-1]
         self.factor = (len(x) * jnp.log(2 * jnp.pi))
 
-    def _get_initial_pos(self, fix_mean_params, fix_kernel_params, fix_lensing_params):
+    def _get_initial_pos(self, fix_kernel_params, fix_mean_params, fix_lensing_params):
         """
         Put together the vector (init_pos) of parameters which the mean function and kernel are initialized with at the starting location for the optimization/sampling process. The parameters of the kernel are stacked first, followed by the mean function parameters.
         """
@@ -126,25 +142,27 @@ class GP:
         yerr_rescaled = yerr/factor
         return y_rescaled, yerr_rescaled
     
-    def logprior(self, params):
+    def _logprior(self, params):
         """
         Default uniformative prior.
         """
         return 0
     
-    def loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params):
+    def _loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params):
         """
         Compute the log likelihood of a multivariate normal PDF.
         """
-        shifted_x, b_vector = self.lensingmodel.lens(x, params=lensing_params)
+        shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
 
         # Compute the mean vector for the given input data points x
-        self.mean = b_vector * self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.bands, zp=self.zp, zpsys=self.zpsys)
+        mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands, images=self.repeated_for_unresolved_images, zp=self.repeated_for_unresolved_zp, zpsys=self.repeated_for_unresolved_zpsys)
+        self.mean = jnp.matmul(transform_matrix, mean)
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
-        K = jnp.outer(b_vector, b_vector) * self.kernel.covariance(shifted_x, params=kernel_params)
-        self.cov = jnp.multiply(self.lensingmodel.mask, K) + jnp.diag(yerr**2)
+        K = self.kernel.covariance(shifted_x, params=kernel_params)
+        K_masked = jnp.multiply(self.lensingmodel.mask, K)
+        self.cov = jnp.matmul(jnp.matmul(transform_matrix, K_masked), jnp.transpose(transform_matrix)) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
         L = jnp.linalg.cholesky(self.cov)
@@ -205,7 +223,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band=None, image=None, zp=27.5, zpsys='ab', method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, init_scale=1., minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
+    def optimize_parameters(self, x, y, yerr, band = None, image = None, zp = 27.5, zpsys = 'ab', n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, p0=None, init_scale=1., minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
 
@@ -279,15 +297,36 @@ class GP:
         else:
             self.y, self.yerr = jnp.array(y), jnp.array(yerr)
         self.bands = band
-        self.zp = zp
-        self.zpsys = zpsys
+        self.images = np.array(image)
         
         # Store n_bands, n_images, and indices information
-        self._prepare_indices(self.x, band, image)
+        self._prepare_indices(self.x, band, image, n_images)
+        self.lensingmodel.import_from_gp(self.kernel, self.meanfunc, band, image, self.n_images, self.indices, self.repeats)
+
+        repeated_for_unresolved_bands = np.tile(band[image == 'unresolved'], self.n_images - 1)
+        self.repeated_for_unresolved_bands = np.concatenate([self.bands, repeated_for_unresolved_bands])
+
+        to_repeat = [f'image_{i+1}' for i in range(self.n_images)]
+        repeated_for_unresolved_images = np.repeat(to_repeat, len(image[image == 'unresolved']))
+        self.repeated_for_unresolved_images = np.concatenate([self.images[image != 'unresolved'], repeated_for_unresolved_images])
+
+        if isinstance(zp, float):
+            repeated_zp = np.repeat(zp, len(self.x))
+        else:
+            repeated_zp = zp
+        repeated_for_unresolved_zp = np.tile(repeated_zp[image == 'unresolved'], self.n_images - 1)
+        self.repeated_for_unresolved_zp = np.concatenate([repeated_zp, repeated_for_unresolved_zp])
+        
+        if isinstance(zpsys, str):
+            repeated_zpsys = np.repeat(zpsys, len(self.x))
+        else:
+            repeated_zpsys = zpsys
+        repeated_for_unresolved_zpsys = np.tile(repeated_zpsys[image == 'unresolved'], self.n_images - 1)
+        self.repeated_for_unresolved_zpsys = np.concatenate([repeated_zpsys, repeated_for_unresolved_zpsys])
+
         try:
-            self.lensingmodel.import_from_gp(self.n_bands, self.n_images, self.indices)
+            self.lensingmodel.mask = self.lensingmodel.make_mask(self.repeated_for_unresolved_bands, self.repeated_for_unresolved_images)
         except:
-            fix_lensing_params = True
             pass
 
         # Determine the number of dimensions for optimization/sampling
@@ -301,11 +340,11 @@ class GP:
         
         # Set the loglikelihood/logprior to the default multi-variate normal likelihood specified within the GP class function, if not otherwise specified
         if loglikelihood == None:
-            loglikelihood = self.loglikelihood
+            self.loglikelihood = jax.jit(self._loglikelihood)
         else:
             self.loglikelihood = loglikelihood
         if logprior == None:
-            logprior = self.logprior
+            self.logprior = self._logprior
         else:
             self.logprior = logprior
             
@@ -327,7 +366,7 @@ class GP:
         
             # Get vector of initial parameters, which is required for optmizing/sampling with the minimize, emcee, and zeus methods
             init_pos = self._get_initial_pos(fix_kernel_params, fix_mean_params, fix_lensing_params)
-
+            
             if type(init_scale) == list and len(init_pos) != len(init_scale):
                 raise ValueError("The length of the initial parameter positions does not match the length of the list with the initial parameter scatter. The init_scale parameter should either be a single number (e.g., init_scale = 1.) or a list with the scale values for each parameter being fit (e.g. init_scale = [1., 1., 1.] when fitting with three free parameters)")
 
@@ -339,7 +378,8 @@ class GP:
                 raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel and mean function were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
                 
             # Initialize walkers with random initial positions around the initial guess
-            p0 = np.random.normal(init_pos, init_scale, size=(nwalkers, self.ndim))
+            if p0 is None:
+                p0 = np.random.normal(init_pos, init_scale, size=(nwalkers, self.ndim))
             for r, row in enumerate(p0):
                 while np.isinf(logprior(row)):
                     p0[r] = np.random.normal(init_pos, 0.001)
@@ -349,10 +389,10 @@ class GP:
 
             
             if method == 'emcee':
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, False), **sampler_kwargs)
+                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
 
             if method == 'zeus':
-                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, False], **sampler_kwargs)
+                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
 
 
             # Run the sampler
@@ -401,6 +441,3 @@ class GP:
         variance = cov_UU - (cov_UV @ np.linalg.solve(cov_VV, np.transpose(cov_UV)))
 
         return expectation, variance
-    
-    
-    
