@@ -81,8 +81,8 @@ class GP:
  
         Builds `self.indices`, a cumulative-count array marking where each
         band/image group starts and ends within the flattened data arrays
-        (x, y, yerr). Group order follows np.unique(band) and, within each
-        band, np.unique(image). These boundaries are used elsewhere (e.g. by
+        (x, y, yerr). Group order follows np.unique(image) and, within each
+        image, np.unique(band). These boundaries are used elsewhere (e.g. by
         the lensing model) to know which rows of x/y/yerr belong to which
         band/image combination.
  
@@ -336,7 +336,7 @@ class GP:
             
         return invert * loglike
     
-    def optimize_parameters(self, x, y, yerr, band = None, image = None, zp = 27.5, zpsys = 'ab', n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, p0=None, init_scale=1., minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
+    def optimize_parameters(self, x, y, yerr, band = None, image = None, zp = 27.5, zpsys = 'ab', n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, p0=None, init_scale=1., minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
  
@@ -515,9 +515,12 @@ class GP:
                     p0[r] = np.random.normal(init_pos, 0.001)
             
             if method == 'emcee':
+                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
                 sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
 
             if method == 'zeus':
+                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
+
                 sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
 
 
