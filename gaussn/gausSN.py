@@ -183,6 +183,36 @@ class GP:
         y_rescaled = y/factor
         yerr_rescaled = yerr/factor
         return y_rescaled, yerr_rescaled
+
+    def _split_params(self, params, fix_kernel_params, fix_mean_params, fix_lensing_params):
+        """
+        Slice the flat parameter vector `params` into the (kernel, meanfunc,
+        lensing) sub-vectors, in that fixed order, skipping over any groups
+        that are held fixed. `params` therefore only ever contains the *free*
+        parameters -- this matches `_get_initial_pos`.
+ 
+        This replaces the old 8-way if/elif chain in `jointprobability` with
+        equivalent logic that reads the same either as plain Python (used by
+        the interactive `jointprobability` above) or when traced by jax.jit
+        (used by `_build_jitted_jointprobability` below) -- all the branching
+        here is on the *static* fix_* booleans, never on `params` itself, so
+        it resolves at trace time and doesn't require lax.cond.
+        """
+        idx = 0
+        kernel_params = meanfunc_params = lensing_params = None
+        if not fix_kernel_params:
+            n = len(self.kernel.params)
+            kernel_params = [params[idx + i] for i in range(n)]
+            idx += n
+        if not fix_mean_params:
+            n = len(self.meanfunc.params)
+            meanfunc_params = [params[idx + i] for i in range(n)]
+            idx += n
+        if not fix_lensing_params:
+            n = len(self.lensingmodel.params)
+            lensing_params = [params[idx + i] for i in range(n)]
+            idx += n
+        return kernel_params, meanfunc_params, lensing_params
     
     def _logprior(self, params):
         """
@@ -251,81 +281,30 @@ class GP:
         
         return loglike
         
-    def jointprobability(self, params, logprior = None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, invert=1):
-        """
-        Compute the joint log-probability (log-likelihood + log-prior) of
-        the kernel, mean function, and lensing-model parameters.
- 
-        `params` is a flat vector containing only the currently free
-        parameter groups, in the same order used by `_get_initial_pos`:
-        kernel params, then mean-function params, then lensing params (any
-        group fixed via `fix_*_params=True` is simply absent from `params`
-        and its stored/default value is used instead).
- 
-        Parameters:
-            params: array-like, flat vector of free parameter values.
-            logprior: callable taking `params` and returning a log-prior value.
-            fix_kernel_params: bool, whether kernel parameters are held fixed.
-            fix_mean_params: bool, whether mean-function parameters are held fixed.
-            fix_lensing_params: bool, whether lensing-model parameters are held fixed.
-            invert: 1 or -1. Use -1 to get the *negative* log-probability,
-                as required by `scipy.optimize.minimize` (which minimizes),
-                and 1 for MCMC/nested samplers (which maximize the posterior).
- 
-        Returns:
-            float: `invert` times the joint log-probability, or
-            `invert * -inf` if the prior is invalid or the likelihood is
-            non-finite (this keeps NaNs from propagating into optimizers/samplers).
-        """
+    def jointprobability(self, logprior = None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False):
 
-        # Reject immediately if the point falls outside the prior support,
-        # without paying the cost of evaluating the (potentially expensive) likelihood.
-        log_prior = logprior(params)
-        if jnp.isinf(log_prior) or jnp.isnan(log_prior):
-            return invert * -jnp.inf
-        
-        # Unpack the flat `params` vector into its constituent parameter
-        # groups (kernel/mean/lensing), based on which groups are free.
-        # Only free groups are present in `params`, in kernel -> mean ->
-        # lensing order, so the slicing below must match that ordering.
-        kernel_params = None
-        meanfunc_params = None
-        lensing_params = None
-        if not fix_lensing_params and not fix_mean_params and not fix_kernel_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-            meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
-            lensing_params = [params[i+len(self.kernel.params)+len(self.meanfunc.params)] for i in range(len(self.lensingmodel.params))]
-        elif not fix_mean_params and not fix_kernel_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-            meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
-        elif not fix_mean_params and not fix_lensing_params:
-            meanfunc_params = [params[i] for i in range(len(self.meanfunc.params))]
-            lensing_params = [params[i+len(self.meanfunc.params)] for i in range(len(self.lensingmodel.params))]
-        elif not fix_kernel_params and not fix_lensing_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-            lensing_params = [params[i+len(self.kernel.params)] for i in range(len(self.lensingmodel.params))]
-        elif not fix_kernel_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-        elif not fix_mean_params:
-            meanfunc_params = [params[i] for i in range(len(self.meanfunc.params))]
-        elif not fix_lensing_params:
-            lensing_params = [params[i] for i in range(len(self.lensingmodel.params))]
-
-        # Evaluate the log-likelihood for the (possibly partially fixed)
-        # parameter groups against the full dataset stored on self
-        # (self.x, self.y, self.yerr, set in optimize_parameters).
-        # Note: any band/image separation is handled inside the lensing
-        # model's masking of the covariance matrix (see _loglikelihood),
-        # not by looping over bands here - this is a single joint
-        # evaluation across all bands/images at once.
-        loglike = self.loglikelihood(self.x, self.y, self.yerr, kernel_params, meanfunc_params, lensing_params)
-        loglike += log_prior
-        
-        # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
-        if jnp.isinf(loglike) or jnp.isnan(loglike):
-            return invert * -jnp.inf
-            
-        return invert * loglike
+        def core(params, invert):
+            kernel_params, meanfunc_params, lensing_params = self._split_params(params, fix_kernel_params, fix_mean_params, fix_lensing_params)
+            log_prior = logprior(params)
+ 
+            def compute(_):
+                loglike = self.loglikelihood(self.x, self.y, self.yerr, kernel_params, meanfunc_params, lensing_params)
+                total = loglike + log_prior
+                bad = jnp.isnan(total) | jnp.isinf(total)
+                return jnp.where(bad, -jnp.inf, total)
+ 
+            def skip(_):
+                # Mirrors the original behaviour of short-circuiting out of
+                # an expensive cholesky/solve when the prior already rejects
+                # this point -- jax.lax.cond only executes the taken branch,
+                # so this is a real compute saving, not just cosmetic.
+                return -jnp.inf
+ 
+            prior_bad = jnp.isnan(log_prior) | jnp.isinf(log_prior)
+            result = jax.lax.cond(prior_bad, skip, compute, operand=None)
+            return invert * result
+ 
+        return jax.jit(core)
     
     def optimize_parameters(self, x, y, yerr, band=None, image=None, zp=27.5, zpsys='ab', method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, init_scale=1., p0=None, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
         """
@@ -446,13 +425,18 @@ class GP:
             self.logprior = self._logprior
         else:
             self.logprior = logprior
+
+        jit_logprob = self.jointprobability(self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params)
         
         if method == 'dynesty':
                 
             nlive = sampler_kwargs.pop('nlive', 500)
             sample = sampler_kwargs.pop('sample', 'rslice')
+
+            def dynesty_loglike(params):
+                return float(jit_logprob(jnp.asarray(params), 1.0))
            
-            sampler = dynesty.NestedSampler(self.jointprobability, ptform, self.ndim, logl_args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params), nlive = nlive, sample = sample, **sampler_kwargs)
+            sampler = dynesty.NestedSampler(dynesty_loglike, ptform, self.ndim, nlive = nlive, sample = sample, **sampler_kwargs)
             
             sampler.run_nested(**run_sampler_kwargs)
             return sampler
@@ -465,31 +449,47 @@ class GP:
             if type(init_scale) == list and len(init_pos) != len(init_scale):
                 raise ValueError("The length of the initial parameter positions does not match the length of the list with the initial parameter scatter. The init_scale parameter should either be a single number (e.g., init_scale = 1.) or a list with the scale values for each parameter being fit (e.g. init_scale = [1., 1., 1.] when fitting with three free parameters)")
 
-            if method == 'minimize': 
-                results = minimize(self.jointprobability, init_pos, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, -1), **minimize_kwargs)
+            if method == 'minimize':
+                # Since the whole likelihood is JAX code, we get exact
+                # gradients for free via autodiff instead of scipy falling
+                # back to (slow, noisy) finite differences. jac=True tells
+                # scipy.optimize.minimize that the objective returns
+                # (value, gradient) together.
+                grad_fn = jax.jit(jax.grad(lambda p: jit_logprob(p, -1.0)))
+ 
+                def objective(params):
+                    params = jnp.asarray(params)
+                    value = jit_logprob(params, -1.0)
+                    grad = grad_fn(params)
+                    return float(value), np.asarray(grad)
+ 
+                minimize_kwargs.setdefault('jac', True)
+                results = minimize(objective, init_pos, **minimize_kwargs)
                 return results
 
             if np.isinf(np.any(self.logprior(init_pos))):
                 raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel and mean function were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
 
+            nwalkers = sampler_kwargs.pop('nwalkers', 24)
+            nsteps = run_sampler_kwargs.pop('nsteps', 1000)
+
             if p0 is None:
-                nwalkers = sampler_kwargs.pop('nwalkers', 24)
                 # Initialize walkers with random initial positions around the initial guess
                 p0 = np.random.normal(init_pos, init_scale, size=(nwalkers, self.ndim))
                 for r, row in enumerate(p0):
                     while np.isinf(self.logprior(row)):
                         p0[r] = np.random.normal(init_pos, 0.001)
-            else:
-                nwalkers = len(p0)
+
+            def sampler_loglike(params):
+                return float(jit_logprob(jnp.asarray(params), 1.0))
             
             if method == 'emcee':
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
+                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, sampler_loglike, **sampler_kwargs)
 
             if method == 'zeus':
-                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
+                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, sampler_loglike, **sampler_kwargs)
 
             # Run the sampler
-            nsteps = run_sampler_kwargs.pop('nsteps', 1000)
             sampler.run_mcmc(p0, nsteps=nsteps, **run_sampler_kwargs)
             return sampler
     
