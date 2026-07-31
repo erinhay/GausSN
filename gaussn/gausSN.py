@@ -155,21 +155,21 @@ class GP:
         shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
 
         # Compute the mean vector for the given input data points x
-        mean = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands, images=self.repeated_for_unresolved_images, zp=self.repeated_for_unresolved_zp, zpsys=self.repeated_for_unresolved_zpsys)
-        self.mean = jnp.matmul(transform_matrix, mean)
+        mean_temp = self.meanfunc.mean(shifted_x, params=meanfunc_params, bands=self.repeated_for_unresolved_bands, images=self.repeated_for_unresolved_images, zp=self.repeated_for_unresolved_zp, zpsys=self.repeated_for_unresolved_zpsys)
+        mean = jnp.matmul(transform_matrix, mean_temp)
         
         # Compute the covariance matrix K for the given input data points x
         # and modify the covariance matrix to include magnification effects (if applicable) and measurement uncertainties
         K = self.kernel.covariance(shifted_x, params=kernel_params)
         K_masked = jnp.multiply(self.lensingmodel.mask, K)
-        self.cov = jnp.matmul(jnp.matmul(transform_matrix, K_masked), jnp.transpose(transform_matrix)) + jnp.diag(yerr**2)
+        cov = jnp.matmul(jnp.matmul(transform_matrix, K_masked), jnp.transpose(transform_matrix)) + jnp.diag(yerr**2)
         
         # Compute the logarithm of the determinant of the covariance matrix
-        L = jnp.linalg.cholesky(self.cov)
+        L = jnp.linalg.cholesky(cov)
         a = self.factor + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
         # Compute the term in the exponential of the PDF of a MVN PDF
-        z = solve_triangular(L, self.mean - y, lower=True)
+        z = solve_triangular(L, mean - y, lower=True)
         b = z.T @ z
         
         # Compute the log likelihood of a MVN PDF
@@ -357,7 +357,7 @@ class GP:
             nlive = sampler_kwargs.pop('nlive', 500)
             sample = sampler_kwargs.pop('sample', 'rslice')
            
-            sampler = dynesty.NestedSampler(self.jointprobability, ptform, self.ndim, logl_args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params), nlive = nlive, sample = sample, **sampler_kwargs)
+            sampler = dynesty.NestedSampler(self.jointprobability, ptform, self.ndim, logl_args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params), nlive = nlive, sample = sample, **sampler_kwargs)
             
             sampler.run_nested(**run_sampler_kwargs)
             return sampler
@@ -371,17 +371,17 @@ class GP:
                 raise ValueError("The length of the initial parameter positions does not match the length of the list with the initial parameter scatter. The init_scale parameter should either be a single number (e.g., init_scale = 1.) or a list with the scale values for each parameter being fit (e.g. init_scale = [1., 1., 1.] when fitting with three free parameters)")
 
             if method == 'minimize': 
-                results = minimize(self.jointprobability, init_pos, args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, -1), **minimize_kwargs)
+                results = minimize(self.jointprobability, init_pos, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, -1), **minimize_kwargs)
                 return results
 
-            if np.isinf(np.any(logprior(init_pos))):
+            if np.isinf(np.any(self.logprior(init_pos))):
                 raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel and mean function were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
                 
             # Initialize walkers with random initial positions around the initial guess
             if p0 is None:
                 p0 = np.random.normal(init_pos, init_scale, size=(nwalkers, self.ndim))
             for r, row in enumerate(p0):
-                while np.isinf(logprior(row)):
+                while np.isinf(self.logprior(row)):
                     p0[r] = np.random.normal(init_pos, 0.001)
 
             nwalkers = sampler_kwargs.pop('nwalkers', 24)
@@ -389,10 +389,10 @@ class GP:
 
             
             if method == 'emcee':
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
+                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
 
             if method == 'zeus':
-                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
+                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
 
 
             # Run the sampler
