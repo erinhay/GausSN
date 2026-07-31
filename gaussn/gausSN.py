@@ -522,6 +522,7 @@ class GP:
 
 
             # Run the sampler
+            nsteps = run_sampler_kwargs.pop('nsteps', 1000)
             sampler.run_mcmc(p0, nsteps=nsteps, **run_sampler_kwargs)
             return sampler
     
