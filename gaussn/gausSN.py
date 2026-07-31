@@ -29,14 +29,17 @@ class GP:
     Attributes:
         kernel: The kernel function defining the covariance between data points.
         meanfunc: The mean function defining the expected value of the process.
-
+        lensingmodel: The lensing model applied to the time and flux axes before
+            evaluating the mean/covariance. Defaults to lensingmodels.NoLensing(),
+            which leaves the data unchanged (i.e. an ordinary, non-lensed GP).
+ 
     Methods:
         __init__(self, kernel, meanfunc, lensingmodel=None): Initialize the GP with a kernel and mean function.
         _prepare_indices(self, x, band, image): Prepare indices for multi-band/multi-image data.
         _rescale_data(self, y, yerr): Rescale the y data and their errors.
-        logprior(self, params): Default uninformative prior for MCMC sampling methods.
-        loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params): Compute the log likelihood of the GP model.
-        jointprobability(self, params, logprior=None, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, invert=1): Compute the joint probability of kernel and mean function parameters.
+        _logprior(self, params): Default uninformative (flat) prior for MCMC sampling methods.
+        _loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params): Default log likelihood of the GP model.
+        jointprobability(self, params, logprior=None, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, invert=1): Compute the joint probability (likelihood + prior) of kernel, mean function, and lensing parameters.
         optimize_parameters(self, x, y, yerr, band=None, image=None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, host_dust_kwargs=None, lens_dust_kwargs=None): Optimize GP parameters using different methods (minimize, emcee, zeus, dynesty).
         predict(self, x_prime, x, y, yerr, band): Predict function values at new locations given observed data.
         
@@ -45,10 +48,10 @@ class GP:
         kernel = kernels.KernelName(kernel_params)
         meanfunc = meanfuncs.MeanFuncName(meanfunc_params)
         gp_model = GP(kernel, meanfunc)
-
+ 
         # Optimize the parameters using the minimize method
         gp_model.optimize_parameters(x_train, y_train, yerr_train, method='minimize')
-
+ 
         # Make predictions using the optimized model
         x_new = ...
         y_pred, y_pred_variance = gp_model.predict(x_new, x_train, y_train, yerr_train)
@@ -61,7 +64,9 @@ class GP:
         Parameters:
             kernel: Kernel function defining covariance.
             meanfunc: Mean function defining expected value.
-            lensingmodel: Model for lensing effects (optional).
+            lensingmodel: Model for lensing effects (optional). If omitted,
+                defaults to lensingmodels.NoLensing(), so the GP behaves as a
+                standard (non-lensed) Gaussian Process.
         """
         self.kernel = kernel
         self.meanfunc = meanfunc
@@ -72,7 +77,25 @@ class GP:
         
     def _prepare_indices(self, x, band, image, n_images):
         """
-        Prepare indices for multi-band/multi-image data.
+        Precompute bookkeeping needed for multi-band/multi-image data.
+ 
+        Builds `self.indices`, a cumulative-count array marking where each
+        band/image group starts and ends within the flattened data arrays
+        (x, y, yerr). Group order follows np.unique(band) and, within each
+        band, np.unique(image). These boundaries are used elsewhere (e.g. by
+        the lensing model) to know which rows of x/y/yerr belong to which
+        band/image combination.
+ 
+        Also sets `self.n_bands`, `self.n_images`, and `self.factor` (the
+        constant term len(x) * log(2*pi) used in the multivariate normal
+        log-likelihood, precomputed once here for efficiency).
+ 
+        Parameters:
+            x: array-like of observation times/locations.
+            band: array-like of band labels for each observation, or None
+                if there is only a single band.
+            image: array-like of image labels for each observation (used for
+                lensed multi-image data), or None if there is only one image.
         """
         self.n_bands = len(np.unique(band))
 
@@ -118,7 +141,26 @@ class GP:
 
     def _get_initial_pos(self, fix_kernel_params, fix_mean_params, fix_lensing_params):
         """
-        Put together the vector (init_pos) of parameters which the mean function and kernel are initialized with at the starting location for the optimization/sampling process. The parameters of the kernel are stacked first, followed by the mean function parameters.
+        Assemble the initial-parameter vector used to start optimization/sampling.
+ 
+        Free (non-fixed) parameter groups are concatenated in a fixed order:
+        kernel parameters first, then mean-function parameters, then lensing-
+        model parameters. Any group whose corresponding `fix_*_params` flag
+        is True is left out of the vector entirely (and therefore held fixed
+        at its current value during optimization/sampling). This same
+        ordering convention is relied upon in `jointprobability` when
+        unpacking `params` back into the individual parameter groups.
+ 
+        Parameters:
+            fix_kernel_params: bool, if True the kernel parameters are excluded.
+            fix_mean_params: bool, if True the mean-function parameters are excluded.
+            fix_lensing_params: bool, if True the lensing-model parameters are excluded.
+ 
+        Returns:
+            list: concatenated initial values for all free parameters.
+ 
+        Raises:
+            Exception: if every parameter group is fixed, leaving nothing to fit.
         """
         init_pos = []
         if not fix_kernel_params:
@@ -135,7 +177,20 @@ class GP:
     
     def _rescale_data(self, y, yerr):
         """
-        Rescale the y data and their errors so it spans only 1 unit.
+        Rescale y and yerr by dividing through by the range of y (max - min).
+ 
+        This does not shift/center the data, only rescales it, so the result
+        is not guaranteed to lie within [0, 1] unless y already starts at 0 -
+        it simply compresses the *span* of y (and yerr, proportionally) to 1
+        unit. This can help numerical stability of the optimizer when the
+        raw flux values are very large or very small.
+ 
+        Parameters:
+            y: array-like of observed values.
+            yerr: array-like of measurement uncertainties on y.
+ 
+        Returns:
+            tuple: (y_rescaled, yerr_rescaled)
         """
         factor = jnp.max(y) - jnp.min(y)
         y_rescaled = y/factor
@@ -144,13 +199,37 @@ class GP:
     
     def _logprior(self, params):
         """
-        Default uniformative prior.
+        Default prior: flat/uninformative over all parameter values.
+ 
+        Always returns 0 (i.e. log(1)), so it has no effect on the posterior
+        and sampling is driven purely by the likelihood. Users who need
+        bounded or informative priors should pass their own `logprior`
+        function to `optimize_parameters`.
         """
         return 0
     
     def _loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params):
         """
-        Compute the log likelihood of a multivariate normal PDF.
+        Compute the log-likelihood of the data under a multivariate normal
+        (Gaussian Process) model, including the lensing model's effect on
+        the time axis and flux normalization.
+ 
+        Note: this method relies on `self.bands`, `self.zp`, and `self.zpsys`
+        being set beforehand (this happens in `optimize_parameters`), since
+        they are needed by `self.meanfunc.mean` but are not passed in as
+        explicit arguments.
+ 
+        Parameters:
+            x: array-like, observation times/locations.
+            y: array-like, observed flux values.
+            yerr: array-like, measurement uncertainties on y.
+            kernel_params: parameters for the covariance kernel.
+            meanfunc_params: parameters for the mean function.
+            lensing_params: parameters for the lensing model (time delays,
+                magnifications, etc.).
+ 
+        Returns:
+            float: the log-likelihood of (y, yerr) given the model.
         """
         shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
 
@@ -164,30 +243,60 @@ class GP:
         K_masked = jnp.multiply(self.lensingmodel.mask, K)
         cov = jnp.matmul(jnp.matmul(transform_matrix, K_masked), jnp.transpose(transform_matrix)) + jnp.diag(yerr**2)
         
-        # Compute the logarithm of the determinant of the covariance matrix
+        # Cholesky decomposition of the covariance matrix. Used both to get
+        # the log-determinant efficiently (2 * sum(log(diag(L)))) and to
+        # solve the quadratic form below without explicitly inverting cov.
         L = jnp.linalg.cholesky(cov)
         a = self.factor + ( 2 * jnp.sum(jnp.log(jnp.diag(L))) )
         
-        # Compute the term in the exponential of the PDF of a MVN PDF
+        # z = L^-1 (mean - y), so that z^T z = (mean-y)^T cov^-1 (mean-y),
+        # the quadratic (Mahalanobis-distance) term in the MVN log-likelihood.
         z = solve_triangular(L, mean - y, lower=True)
         b = z.T @ z
         
-        # Compute the log likelihood of a MVN PDF
+        # Standard multivariate normal log-likelihood:
+        # -0.5 * (N*log(2*pi) + log|cov| + (y-mean)^T cov^-1 (y-mean))
         loglike = -0.5*(a + b)
         
         return loglike
         
     def jointprobability(self, params, logprior = None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, invert=1):
         """
-        Compute the joint probability of the kernel, mean function, and lensing model parameters (if applicable).
+        Compute the joint log-probability (log-likelihood + log-prior) of
+        the kernel, mean function, and lensing-model parameters.
+ 
+        `params` is a flat vector containing only the currently free
+        parameter groups, in the same order used by `_get_initial_pos`:
+        kernel params, then mean-function params, then lensing params (any
+        group fixed via `fix_*_params=True` is simply absent from `params`
+        and its stored/default value is used instead).
+ 
+        Parameters:
+            params: array-like, flat vector of free parameter values.
+            logprior: callable taking `params` and returning a log-prior value.
+            fix_kernel_params: bool, whether kernel parameters are held fixed.
+            fix_mean_params: bool, whether mean-function parameters are held fixed.
+            fix_lensing_params: bool, whether lensing-model parameters are held fixed.
+            invert: 1 or -1. Use -1 to get the *negative* log-probability,
+                as required by `scipy.optimize.minimize` (which minimizes),
+                and 1 for MCMC/nested samplers (which maximize the posterior).
+ 
+        Returns:
+            float: `invert` times the joint log-probability, or
+            `invert * -inf` if the prior is invalid or the likelihood is
+            non-finite (this keeps NaNs from propagating into optimizers/samplers).
         """
 
-        # Compute the log prior for the given parameters
+        # Reject immediately if the point falls outside the prior support,
+        # without paying the cost of evaluating the (potentially expensive) likelihood.
         log_prior = logprior(params)
         if jnp.isinf(log_prior) or jnp.isnan(log_prior):
             return invert * -jnp.inf
         
-        # Reset the kernel, mean function, and/or lensing parameters
+        # Unpack the flat `params` vector into its constituent parameter
+        # groups (kernel/mean/lensing), based on which groups are free.
+        # Only free groups are present in `params`, in kernel -> mean ->
+        # lensing order, so the slicing below must match that ordering.
         kernel_params = None
         meanfunc_params = None
         lensing_params = None
@@ -211,9 +320,13 @@ class GP:
         elif not fix_lensing_params:
             lensing_params = [params[i] for i in range(len(self.lensingmodel.params))]
 
-        # Compute the log likelihood for the given parameters
-        # For multi-wavelength observations, we make the simplifying assumption that there is no covariance between bands
-        # Therefore, we take the log likelihood of each band separately and sum them
+        # Evaluate the log-likelihood for the (possibly partially fixed)
+        # parameter groups against the full dataset stored on self
+        # (self.x, self.y, self.yerr, set in optimize_parameters).
+        # Note: any band/image separation is handled inside the lensing
+        # model's masking of the covariance matrix (see _loglikelihood),
+        # not by looping over bands here - this is a single joint
+        # evaluation across all bands/images at once.
         loglike = self.loglikelihood(self.x, self.y, self.yerr, kernel_params, meanfunc_params, lensing_params)
         loglike += log_prior
         
@@ -226,13 +339,13 @@ class GP:
     def optimize_parameters(self, x, y, yerr, band = None, image = None, zp = 27.5, zpsys = 'ab', n_images = None, method='minimize', loglikelihood=None, logprior=None, ptform=None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, p0=None, init_scale=1., minimize_kwargs=None, sampler_kwargs=None, run_sampler_kwargs=None, rescale_data=False):
         """
         Optimize the parameters of the Gaussian Process (GP) for a set of observations.
-
+ 
         :param x: array-like
             Input data points (independent variable).
-
+ 
         :param y: array-like
             Observed values corresponding to the input data points.
-
+ 
         :param yerr: array-like
             Measurement uncertainties of the observed values.
             
@@ -241,6 +354,13 @@ class GP:
             
         :param image: array-like, optional (default=None)
             Image information for multi-image data.
+ 
+        :param zp: float, optional (default=27.5)
+            Zeropoint used when evaluating the mean function (e.g. to convert
+            between flux and magnitude systems).
+ 
+        :param zpsys: str, optional (default='ab')
+            Magnitude system corresponding to `zp` (e.g. 'ab').
             
         :param method: str, optional (default='minimize')
             The method for optimizing parameters. Available options: 'minimize' (scipy.optimize.minimize BFGS), 'emcee' (ensemble MCMC sampler), 'zeus' (ensemble slice sampler), and 'dynesty' (nested sampling).
@@ -262,7 +382,7 @@ class GP:
             
         :param fix_lensing_params: bool, optional (default=False)
             Whether to fix the parameters of the lensing model during optimization/sampling.
-
+ 
         :param init_scale: int, float, or array-like, optional (default=1)
             If using emcee or zeus, the scatter introduced around the initial parameter positions to use when initializing the chains. This parameter should either be a single number (e.g., init_scale = 1.) or a list with the scale values for each parameter being fit (e.g. init_scale = [1., 1., 1.] when fitting with three free parameters). Defaults to 1 for all parameters.
             
@@ -271,9 +391,16 @@ class GP:
             
         :param sampler_kwargs: dict, optional (default=None)
             Additional keyword arguments for the emcee, zeus, or dynesty sampler.
+            Also used to pop off sampler-setup options handled specially here:
+            'nlive' and 'sample' for dynesty, 'nwalkers' for emcee/zeus.
             
         :param run_sampler_kwargs: dict, optional (default=None)
             Additional keyword arguments for running the emcee, zeus, or dynesty sampler.
+            Also used to pop off 'nsteps' for emcee/zeus.
+ 
+        :param rescale_data: bool, optional (default=False)
+            If True, rescales y and yerr via `_rescale_data` before fitting
+            (dividing through by the range of y).
             
         :return results:
             If using the 'minimize' method, returns the scipy.optimize style results.
@@ -290,7 +417,9 @@ class GP:
         if minimize_kwargs is None:
             minimize_kwargs = {}
             
-        # Convert data numpy arrays to jax arrays for faster computing later on
+        # Convert data to jax arrays for faster computation, and store them
+        # on self since jointprobability/_loglikelihood read self.x/self.y/self.yerr
+        # rather than taking the data as arguments.
         self.x = jnp.array(x)
         if rescale_data:
             self.y, self.yerr = self._rescale_data(jnp.array(y), jnp.array(yerr))
@@ -329,7 +458,8 @@ class GP:
         except:
             pass
 
-        # Determine the number of dimensions for optimization/sampling
+        # Determine the number of free dimensions being optimized/sampled,
+        # based on which parameter groups are not fixed.
         self.ndim = 0
         if not fix_kernel_params:
             self.ndim += len(self.kernel.params)
@@ -338,7 +468,8 @@ class GP:
         if not fix_lensing_params:
             self.ndim += len(self.lensingmodel.params)
         
-        # Set the loglikelihood/logprior to the default multi-variate normal likelihood specified within the GP class function, if not otherwise specified
+        # Use the default multivariate-normal log-likelihood (JIT-compiled
+        # for speed) unless the user supplied their own. Same for the prior.
         if loglikelihood == None:
             self.loglikelihood = jax.jit(self._loglikelihood)
         else:
@@ -347,10 +478,6 @@ class GP:
             self.logprior = self._logprior
         else:
             self.logprior = logprior
-            
-        # Compute mean and covariance given the specified mean function and kernel with their initial parameters
-        self.mean = self.meanfunc.mean(self.x, bands=self.bands)
-        self.cov = self.kernel.covariance(self.x)
         
         if method == 'dynesty':
                 
@@ -376,17 +503,16 @@ class GP:
 
             if np.isinf(np.any(self.logprior(init_pos))):
                 raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel and mean function were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
-                
+
+            nwalkers = sampler_kwargs.pop('nwalkers', 24)
+            nsteps = run_sampler_kwargs.pop('nsteps', 1000)
+
             # Initialize walkers with random initial positions around the initial guess
             if p0 is None:
                 p0 = np.random.normal(init_pos, init_scale, size=(nwalkers, self.ndim))
             for r, row in enumerate(p0):
                 while np.isinf(self.logprior(row)):
                     p0[r] = np.random.normal(init_pos, 0.001)
-
-            nwalkers = sampler_kwargs.pop('nwalkers', 24)
-            nsteps = run_sampler_kwargs.pop('nsteps', 1000)
-
             
             if method == 'emcee':
                 sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
