@@ -425,12 +425,12 @@ class GP:
             self.y, self.yerr = self._rescale_data(jnp.array(y), jnp.array(yerr))
         else:
             self.y, self.yerr = jnp.array(y), jnp.array(yerr)
-        self.bands = band
+        self.bands = np.array(band)
         self.images = np.array(image)
         
         # Store n_bands, n_images, and indices information
         self._prepare_indices(self.x, band, image, n_images)
-        self.lensingmodel.import_from_gp(self.kernel, self.meanfunc, band, image, self.n_images, self.indices, self.repeats)
+        self.lensingmodel.import_from_gp(band, image, self.n_images, self.indices, self.repeats)
 
         repeated_for_unresolved_bands = np.tile(band[image == 'unresolved'], self.n_images - 1)
         self.repeated_for_unresolved_bands = np.concatenate([self.bands, repeated_for_unresolved_bands])

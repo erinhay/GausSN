@@ -90,7 +90,7 @@ def plot_object(data, color_dict={'image_1': 'darkblue', 'image_2': 'crimson', '
     fig.subplots_adjust(hspace=0)
     return fig, ax
 
-def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, predict_times = np.linspace(-30, 110, 50), color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}, color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title=''):
+def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel_params=False, fix_mean_params=False, fix_lensing_params=False, predict_times = np.linspace(-30, 110, 50), N_iter=10, color_dict_data = {'image_1': 'darkblue', 'image_2': 'crimson', 'image_3': 'darkgreen', 'image_4': 'tab:orange'}, color_dict_fit = {'image_1': 'tab:blue', 'image_2': 'palevioletred', 'image_3': 'tab:green', 'image_4': 'darkorange'}, marker_dict={'image_1': 'o', 'image_2': 's', 'image_3': '>', 'image_4': '<'}, title=''):
     """
     Plots the fitted glSN with uncertainties.
 
@@ -153,7 +153,7 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
     samples = results.samples_equal()
 
     # Iterate over random samples from the posterior
-    for iter in np.random.choice(len(samples), 200):
+    for iter in np.random.choice(len(samples), N_iter):
         sample = samples[iter]
 
         # Reset parameters based on whether they are fixed
@@ -201,12 +201,13 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
             except:
                 color_dict_fit_temp = color_dict_fit
 
-            repeats = np.array([len(band[band['image'] == pb_id]) for pb_id in np.unique(data['image'])])
+            repeats = np.array([len(band[band['image'] == im_id]) for im_id in np.unique(data['image'])])
             lensingmodel.repeats = repeats
             lensingmodel.n_bands = 1
+            lensingmodel.images = np.array(band['image'].value)
             shifted_time_data, b_vector = lensingmodel._lens(jnp.array(band['time'].value))
 
-            exp, cov = gp.predict(predict_times, shifted_time_data, band['flux']/b_vector, band['fluxerr']/b_vector, band = [pb_id])
+            exp, cov = gp.predict(predict_times, shifted_time_data, band['flux']/np.diag(b_vector), band['fluxerr']/np.diag(b_vector), band = [pb_id])
             
             # Plot predicted flux for each image
             for i in range(1):
@@ -222,9 +223,10 @@ def plot_fitted_object(data, results, kernel, meanfunc, lensingmodel, fix_kernel
                     repeats = np.zeros(len(np.unique(data['image'])), dtype='int')
                     repeats[m] = int(len(predict_times))
                     lensingmodel.repeats = repeats
+                    lensingmodel.images = np.repeat(im_id, len(predict_times))
                     _, b_vector_predict = lensingmodel._lens(jnp.array(predict_times))
 
-                    ax[b].plot(predict_times + lensingmodel.deltas[m], y_vals[0] * b_vector_predict, color=color, alpha=0.02, zorder=2)
+                    ax[b].plot(predict_times + lensingmodel.deltas[m], y_vals[0] * np.diag(b_vector_predict), color=color, alpha=0.05, zorder=2)
     
     # Add legend, xlabel, title, and adjust plot limits
     ax[0].legend(loc='upper right')
