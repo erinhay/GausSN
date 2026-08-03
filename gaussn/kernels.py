@@ -1,9 +1,10 @@
+from abc import ABC, abstractmethod
 import jax.numpy as jnp
 import jax
 
-class ExpSquaredKernel:
+class BaseKernel(ABC):
     """
-    Exponentiated Squared Kernel for Gaussian processes.
+    Parent kernel
     """
     def __init__(self, params):
         """
@@ -14,11 +15,10 @@ class ExpSquaredKernel:
                 A (float): Amplitude parameter of the kernel.
                 tau (float): Length scale parameter of the kernel.
         """
-        self.A = params[0]
-        self.tau = params[1]
+        self._unpack_params(params)
         self.params = params
         self.covariance = jax.jit(self._covariance)
-        
+
     def _reset(self, params):
         """
         Resets the kernel parameters.
@@ -28,10 +28,32 @@ class ExpSquaredKernel:
                 A (float): Amplitude parameter of the kernel.
                 tau (float): Length scale parameter of the kernel.
         """
+        self._unpack_params(params)
+        self.params = params
+    
+    @abstractmethod
+    def _unpack_params(self, params):
+        """
+        Parse the flat `params` list into named jnp arrays.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _covariance(self, x, x_prime=None, params=None):
+        """
+        Compute the covariance.
+        """
+        raise NotImplementedError
+    
+
+class ExpSquaredKernel(BaseKernel):
+    """
+    Exponentiated Squared Kernel for Gaussian processes.
+    """
+    def _unpack_params(self, params):
         self.A = params[0]
         self.tau = params[1]
-        self.params = params
-        
+
     def _covariance(self, x, x_prime=None, params=None):
         """
         Computes the covariance matrix using the Exponentiated Squared Kernel.
@@ -55,36 +77,13 @@ class ExpSquaredKernel:
         K = self.A**2 * jnp.exp(-(x[:, None] - x_prime[None, :])**2/(2*self.tau**2))
         return K
     
-class ExponentialKernel:
+class ExponentialKernel(BaseKernel):
     """
     Exponential Kernel for Gaussian processes.
-    """
-    def __init__(self, params):
-        """
-        Initializes the Exponential Kernel with given parameters.
-
-        Args:
-            params (list): List containing parameters [A, tau].
-                A (float): Amplitude parameter of the kernel.
-                tau (float): Length scale parameter of the kernel.
-        """
+    """  
+    def _unpack_params(self, params):
         self.A = params[0]
         self.tau = params[1]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        """
-        Resets the kernel parameters.
-
-        Args:
-            params (list): List containing parameters [A, tau].
-                A (float): Amplitude parameter of the kernel.
-                tau (float): Length scale parameter of the kernel.
-        """
-        self.A = params[0]
-        self.tau = params[1]
-        self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
         """
@@ -110,29 +109,9 @@ class ExponentialKernel:
         K = self.A**2 * jnp.exp(-vector_mag/self.tau)
         return K
 
-class ConstantKernel:
-    def __init__(self, params):
-        """
-        Initializes the Constant Kernel with given parameters.
-
-        Args:
-            params (list): List containing parameters [c].
-                c (float): Constant value of the kernel.
-        """
-        self.c = params[0]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        """
-        Resets the kernel parameters.
-
-        Args:
-            params (list): List containing parameters [c].
-                c (float): Constant value of the kernel.
-        """
-        self.c = params[0]
-        self.params = params
+class ConstantKernel(BaseKernel):
+    def _unpack_params(self, params):
+        self.c = 0.
         
     def _covariance(self, x, x_prime=None, params=None):
         """
@@ -157,22 +136,12 @@ class ConstantKernel:
         K = jnp.ones([len(x), len(x_prime)]) * self.c
         return K
 
-class DotProductKernel:
+class DotProductKernel(BaseKernel):
     """
     Dot Product Kernel for Gaussian processes.
     """
-    def __init__(self):
-        """
-        Initializes the Dot Product Kernel.
-        """
-        self.c = 0
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self):
-        """
-        Resets the kernel parameters.
-        """
-        self.c = 0
+    def _unpack_params(self, params):
+        self.c = params[0]
         
     def _covariance(self, x, x_prime=None, params=None):
         """
@@ -196,36 +165,13 @@ class DotProductKernel:
         K = jnp.dot(x[:, None], x_prime[None, :])
         return K
 
-class Matern32Kernel:
+class Matern32Kernel(BaseKernel):
     """
     Matern 3/2 Kernel for Gaussian processes.
     """
-    def __init__(self, params):
-        """
-        Initializes the Matern 3/2 Kernel with given parameters.
-
-        Args:
-            params (list): List containing parameters [A, l].
-                A (float): Amplitude parameter of the kernel.
-                l (float): Length scale parameter of the kernel.
-        """
+    def _unpack_params(self, params):
         self.A = params[0]
         self.l = params[1]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        """
-        Resets the kernel parameters.
-
-        Args:
-            params (list): List containing parameters [A, l].
-                A (float): Amplitude parameter of the kernel.
-                l (float): Length scale parameter of the kernel.
-        """
-        self.A = params[0]
-        self.l = params[1]
-        self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
         """
@@ -251,36 +197,13 @@ class Matern32Kernel:
         K = self.A * ((1 + jnp.sqrt(3*r2)/self.l) * jnp.exp(-jnp.sqrt(3*r2)/self.l))
         return K
 
-class Matern52Kernel:
+class Matern52Kernel(BaseKernel):
     """
     Matern 5/2 Kernel for Gaussian processes.
     """
-    def __init__(self, params):
-        """
-        Initializes the Matern 5/2 Kernel with given parameters.
-
-        Args:
-            params (list): List containing parameters [A, l].
-                A (float): Amplitude parameter of the kernel.
-                l (float): Length scale parameter of the kernel.
-        """
+    def _unpack_params(self, params):
         self.A = params[0]
         self.l = params[1]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        """
-        Resets the kernel parameters.
-
-        Args:
-            params (list): List containing parameters [A, l].
-                A (float): Amplitude parameter of the kernel.
-                l (float): Length scale parameter of the kernel.
-        """
-        self.A = params[0]
-        self.l = params[1]
-        self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
         """
@@ -308,40 +231,14 @@ class Matern52Kernel:
         K = self.A * a * jnp.exp(b)
         return K
     
-class RationalQuadraticKernel:
+class RationalQuadraticKernel(BaseKernel):
     """
     Rational Quadratic Kernel for Gaussian processes.
     """
-    def __init__(self, params):
-        """
-        Initializes the Rational Quadratic Kernel with given parameters.
-
-        Args:
-            params (list): List containing parameters [A, tau, scale_mixture].
-                A (float): Amplitude parameter of the kernel.
-                tau (float): Length scale parameter of the kernel.
-                scale_mixture (float): Scale mixture parameter of the kernel.
-        """
+    def _unpack_params(self, params):
         self.A = params[0]
-        self.tau = params[1]
+        self.l = params[1]
         self.scale_mixture = params[2]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        """
-        Resets the kernel parameters.
-
-        Args:
-            params (list): List containing parameters [A, tau, scale_mixture].
-                A (float): Amplitude parameter of the kernel.
-                tau (float): Length scale parameter of the kernel.
-                scale_mixture (float): Scale mixture parameter of the kernel.
-        """
-        self.A = params[0]
-        self.tau = params[1]
-        self.scale_mixture = params[2]
-        self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
         """
@@ -366,7 +263,7 @@ class RationalQuadraticKernel:
         K = self.A**2 * (1 + (x[:, None] - x_prime[None, :])**2/(2*self.scale_mixture*self.tau**2))
         return K
     
-class GibbsKernel:
+class GibbsKernel(BaseKernel):
     """
     Gibbs Kernel for Gaussian processes.
     
@@ -375,11 +272,9 @@ class GibbsKernel:
     where:
         tau(y|mu, sigma) = lambda * (1 - p * N(y|mu, sigma))
     and N(y|mu, sigma) is a normal distribution with mean mu and variance sigma**2.
-    """
-    def __init__(self, params):
+    """   
+    def _unpack_params(self, params):
         """
-        Initializes the Gibbs Kernel with given parameters.
-
         Args:
             params (list): List containing parameters [A, lambda, p, mu, sigma].
                 A (float): Amplitude parameter of the kernel.
@@ -393,27 +288,6 @@ class GibbsKernel:
         self.p = params[2]
         self.mu = params[3]
         self.sigma = params[4]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        """
-        Resets the kernel parameters.
-
-        Args:
-            params (list): List containing parameters [A, lambda, p, mu, sigma].
-                A (float): Amplitude parameter of the kernel.
-                lambda (float): Lambda parameter of the kernel.
-                p (float): P parameter of the kernel.
-                mu (float): Mean of the normal distribution.
-                sigma (float): Standard deviation of the normal distribution.
-        """
-        self.A = params[0]
-        self.lamdba = params[1]
-        self.p = params[2]
-        self.mu = params[3]
-        self.sigma = params[4]
-        self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
         """
@@ -447,11 +321,9 @@ class GibbsKernel:
         K = self.A**2 * jnp.sqrt(root_num/denom) * jnp.exp(-exp_num/denom)
         return K
     
-class OUKernel:
-    def __init__(self, params):
+class OUKernel(BaseKernel): 
+    def _unpack_params(self, params):
         """
-        Initializes the Ornstein-Uhlenbeck (OU) kernel with given parameters.
-
         Args:
             params (list): List containing parameters [A, l].
                 A (float): Amplitude parameter of the OU kernel.
@@ -459,21 +331,6 @@ class OUKernel:
         """
         self.A = params[0]
         self.l = params[1]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        """
-        Resets the kernel parameters.
-
-        Args:
-            params (list): List containing parameters [A, l].
-                A (float): Amplitude parameter of the OU kernel.
-                l (float): Length scale parameter of the OU kernel.
-        """
-        self.A = params[0]
-        self.l = params[1]
-        self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
         """
@@ -499,19 +356,11 @@ class OUKernel:
         K = self.A * jnp.exp(-jnp.sqrt(r2) / self.l)
         return K
 
-class PeriodicKernel:
-    def __init__(self, params):
+class PeriodicKernel(BaseKernel):     
+    def _unpack_params(self, params):
         self.A = params[0]
         self.l = params[1]
         self.p = params[2]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        self.A = params[0]
-        self.l = params[1]
-        self.p = params[2]
-        self.params = params
         
     def _covariance(self, x, x_prime=None, params=None):
         if params != None:
@@ -526,21 +375,12 @@ class PeriodicKernel:
         K = self.A * jnp.exp(exponent)
         return K
 
-class JJKernel:
-    def __init__(self, params):
+class JJKernel(BaseKernel):
+    def _unpack_params(self, params):
         self.A = params[0]
         self.l = params[1]
         self.m = params[2]
         self.b = params[3]
-        self.params = params
-        self.covariance = jax.jit(self._covariance)
-        
-    def _reset(self, params):
-        self.A = params[0]
-        self.l = params[1]
-        self.m = params[2]
-        self.b = params[3]
-        self.params = params
 
     def _p(self, x):
         return self.m * x + self.b
