@@ -260,7 +260,7 @@ class SinusoidalMagnification:
         self.beta0s = jnp.array([1] + params[1::5])
         self.beta1s = jnp.array([0] + params[2::5])
         self.t0s = jnp.array([0] + params[3::5])
-        self.Ts = jnp.array([0] + params[4::5])
+        self.Ts = jnp.array([1] + params[4::5])
         self.params = params
         self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
         
@@ -275,7 +275,7 @@ class SinusoidalMagnification:
         self.beta0s = jnp.array([1] + params[1::5])
         self.beta1s = jnp.array([0] + params[2::5])
         self.t0s = jnp.array([0] + params[3::5])
-        self.Ts = jnp.array([0] + params[4::5])
+        self.Ts = jnp.array([1] + params[4::5])
         self.params = params
 
     def _make_mask(self):
