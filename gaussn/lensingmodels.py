@@ -199,7 +199,7 @@ class SinusoidalMagnification(BaseLensingModel):
         self.beta0s = jnp.array([1] + params[1::5])
         self.beta1s = jnp.array([0] + params[2::5])
         self.t0s = jnp.array([0] + params[3::5])
-        self.Ts = jnp.array([0] + params[4::5])
+        self.Ts = jnp.array([1] + params[4::5])
         self.mag_param_names = ['beta0s', 'beta1s', 't0s', 'Ts']
  
     def _magnify(self, x, beta0, beta1, t0, T):
