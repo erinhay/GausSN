@@ -8,11 +8,10 @@ class NoLensing:
     """
     NoLensing treatment for when using the Gaussian Process for cases outside of strong lensing/time-delay cosmography.
     """
-    def __init__(self, params=None):
+    def __init__(self, params):
         self.mask = 1
-        self.lens = jax.jit(self._lens) #jax.jit(self._lens) self._lens
 
-    def _lens(self, x, params=None):
+    def _lens(self, x, params):
         return x, 1
 
 
@@ -31,13 +30,6 @@ class BaseLensingModel(ABC):
             params (list): Flat list of model parameters, ordered per-image
                 (e.g. [delta_1, beta_1, delta_2, beta_2, ...] for N images).
         """
-        self._unpack_params(params)
-        self.params = params
-        self.lens = jax.jit(self._lens)
- 
-    def _reset(self, params):
-        """Re-unpacks a new flat parameter list (called by the sampler at each step)."""
-        self._unpack_params(params)
         self.params = params
  
     @abstractmethod

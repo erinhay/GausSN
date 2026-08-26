@@ -7,300 +7,110 @@ class BaseMeanFunction(ABC):
     """
     Parent kernel
     """
+    param_names: list = []
+
     def __init__(self, params):
-        """
-        Initializes the Uniform Mean function with given parameters.
-
-        Args:
-            params (list): List containing parameters [c].
-                c (float): Constant value of the mean function.
-        """
-        self._unpack_params(params)
-        self.params = params
-        
-    def _reset(self, params):
-        """
-        Resets the mean function parameters.
-
-        Args:
-            params (list): List containing parameters [c].
-                c (float): Constant value of the mean function.
-        """
-        self._unpack_params(params)
         self.params = params
 
-    @abstractmethod
-    def _unpack_params(self, params):
-        """
-        Parse the flat `params` list into named jnp arrays.
-        """
-        raise NotImplementedError
+    def _unpack(self, params):
+        """Pure: flat params list -> dict of named kwargs for _mean_fn. No mutation."""
+        return dict(zip(self.param_names, params))
     
     @abstractmethod
-    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
+    def _mean_fn(self, x, bands, images, zp, zpsys, **params):
+        """Pure mean computation. The only thing each mean function needs to define."""
         raise NotImplementedError
+    
+    def mean(self, x, params=None, bands=None, images=None, zp=None, zpsys=None):
+        if params is None:
+            params = self.params
+        return self._mean_fn(x, bands=bands, images=images, zp=zp, zpsys=zpsys, **self._unpack(params))
     
 
 class UniformMean(BaseMeanFunction):
     """
     Uniform Mean function for Gaussian processes.
     """
-    def _unpack_params(self, params):
-        self.c = params[0]
+    param_names = ['c']
 
-    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
-        """
-        Computes the mean value using the Uniform Mean function.
-
-        Args:
-            y (jax.numpy.ndarray): Input data.
-            params (list, optional): List containing parameters [c] to reset mean function parameters.
-                Defaults to None.
-            bands: Not used in this function.
-
-        Returns:
-            float: Mean value computed using the Uniform Mean function.
-        """
-        if params != None:
-            self._reset(params)
-        return jnp.repeat(self.c, len(y))
+    def _mean_fn(self, x, bands, images, zp, zpsys, c):
+        return jnp.full(x.shape, c)
 
 
 class Sin(BaseMeanFunction):
     """
     Sinusoidal mean function for Gaussian processes.
     """
-    def _unpack_params(self, params):
-        """
-        Args:
-            params (list): List containing parameters [A, w, phi].
-                A (float): Amplitude parameter of the sinusoidal function.
-                w (float): Frequency parameter of the sinusoidal function.
-                phi (float): Phase parameter of the sinusoidal function.
-        """
-        self.A = params[0]
-        self.w = params[1]
-        self.phi = params[2]
+    param_names = ['A', 'w', 'phi']
         
-    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
-        """
-        Computes the mean value using the sinusoidal mean function.
-
-        Args:
-            y (numpy.ndarray): Input data.
-            params (list, optional): List containing parameters [A, w, phi] to reset mean function parameters.
-                Defaults to None.
-            bands: Not used in this function.
-
-        Returns:
-            numpy.ndarray: Mean value computed using the sinusoidal mean function.
-        """
-        if params != None:
-            self._reset(params)
-        return self.A * np.sin((y*self.w) + self.phi)
+    def _mean_fn(self, x, bands, images, zp, zpsys, A, w, phi):
+        return A * jnp.sin((x*w) + phi)
     
+
 class Gaussian(BaseMeanFunction):
     """
     Gaussian mean function for Gaussian processes.
     """
-    def _unpack_params(self, params):
-        """
-        Args:
-            params (list): List containing parameters [A, mu, sigma].
-                A (float): Amplitude parameter of the Gaussian function.
-                mu (float): Mean parameter of the Gaussian function.
-                sigma (float): Standard deviation parameter of the Gaussian function.
-        """
-        self.A = params[0]
-        self.mu = params[1]
-        self.sigma = params[2]
-        
-    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
-        """
-        Computes the mean value using the Gaussian mean function.
-
-        Args:
-            y (numpy.ndarray): Input data.
-            params (list, optional): List containing parameters [A, mu, sigma] to reset mean function parameters.
-                Defaults to None.
-            bands: Not used in this function.
-
-        Returns:
-            numpy.ndarray: Mean value computed using the Gaussian mean function.
-        """
-        if params != None:
-            self._reset(params)
-        exponent = -(y - self.mu)**2 / (2 * self.sigma**2)
-        return self.A * jnp.exp(exponent) / (self.sigma * jnp.sqrt(2*jnp.pi))
+    param_names = ['A', 'mu', 'sigma']
+ 
+    def _mean_fn(self, x, bands, images, zp, zpsys, A, mu, sigma):
+        exponent = -(x - mu)**2 / (2 * sigma**2)
+        return A * jnp.exp(exponent) / (sigma * jnp.sqrt(2*jnp.pi))
     
+
 class ExpFunction(BaseMeanFunction):
     """
     Exponential mean function for Gaussian processes.
     """
-    def _unpack_params(self, params):
-        """
-        Args:
-            params (list): List containing parameters [A, tau].
-                A (float): Amplitude parameter of the exponential function.
-                tau (float): Decay rate parameter of the exponential function.
-        """
-        self.A = params[0]
-        self.tau = params[1]
+    param_names = ['A', 'tau']
         
-    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
-        """
-        Computes the mean value using the Exponential mean function.
+    def _mean_fn(self, x, bands, images, zp, zpsys, A, tau):
+        return A * jnp.exp(x*tau)
 
-        Args:
-            y (numpy.ndarray): Input data.
-            params (list, optional): List containing parameters [A, tau] to reset mean function parameters.
-                Defaults to None.
-            bands: Not used in this function.
-
-        Returns:
-            numpy.ndarray: Mean value computed using the Exponential mean function.
-        """
-        if params != None:
-            self._reset(params)
-        mu = np.zeros([len(y)])
-        mu = self.A * np.exp(y*self.tau)
-        return mu
 
 class Bazin2009(BaseMeanFunction):
     """
     Bazin (2009) mean function for Gaussian processes.
     """
-    def _unpack_params(self, params):
-        """
-        Args:
-            params (list): List containing parameters [A, beta, t0, Tfall, Trise].
-                A (float): Amplitude parameter of the Bazin function.
-                beta (float): Beta parameter of the Bazin function.
-                t0 (float): Time of maximum parameter of the Bazin function.
-                Tfall (float): Fall timescale parameter of the Bazin function.
-                Trise (float): Rise timescale parameter of the Bazin function.
-        """
-        self.A = params[0]
-        self.beta = params[1]
-        self.t0 = params[2]
-        self.Tfall = params[3]
-        self.Trise = params[4]
+    param_names = ['A', 'beta', 't0', 'Tfall', 'Trise']
     
-    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
-        """
-        Computes the mean value using the Bazin (2009) mean function.
-
-        Args:
-            y (numpy.ndarray): Input data.
-            params (list, optional): List containing parameters [A, beta, t0, Tfall, Trise] to reset mean function parameters.
-                Defaults to None.
-            bands: Not used in this function.
-
-        Returns:
-            numpy.ndarray: Mean value computed using the Bazin (2009) mean function.
-        """
-        if params != None:
-            self._reset(params)
-        mu = np.zeros([len(y)])
-
-        a = np.exp(-(y - self.t0)/self.Tfall)
-        b = 1 + np.exp((y - self.t0)/self.Trise)
-        mu = self.A * (a/b) + self.beta
+    def _mean_fn(self, x, bands, images, zp, zpsys, A, beta, t0, Tfall, Trise):
+        a = jnp.exp(-(x - t0)/Tfall)
+        b = 1 + jnp.exp((x - t0)/Trise)
+        mu = A * (a/b) + beta
         return mu
+
 
 class Karpenka2012(BaseMeanFunction):
     """
     Karpenka (2012) mean function for Gaussian processes.
     """
-    def _unpack_params(self, params):
-        """
-        Args:
-            params (list): List containing parameters [A, B, t1, t0, Tfall, Trise, offset].
-                A (float): Amplitude parameter of the Karpenka function.
-                B (float): B parameter of the Karpenka function.
-                t1 (float): t1 parameter of the Karpenka function.
-                t0 (float): t0 parameter of the Karpenka function.
-                Tfall (float): Fall timescale parameter of the Karpenka function.
-                Trise (float): Rise timescale parameter of the Karpenka function.
-                offset (float): Offset parameter of the Karpenka function.
-        """
-        self.A = np.exp(params[0])
-        self.B = np.exp(params[1])
-        self.t1 = params[2]
-        self.t0 = params[3]
-        self.Tfall = params[4]
-        self.Trise = params[5]
+    param_names = ['A', 'B', 't1', 't0', 'Tfall', 'Trise']
     
-    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
-        """
-        Computes the mean value using the Karpenka (2012) mean function.
-
-        Args:
-            y (numpy.ndarray): Input data.
-            params (list, optional): List containing parameters [A, B, t1, t0, Tfall, Trise, offset] to reset mean function parameters.
-                Defaults to None.
-            bands: Not used in this function.
-
-        Returns:
-            numpy.ndarray: Mean value computed using the Karpenka (2012) mean function.
-        """
-        if params != None:
-            self._reset(params)
-        mu = np.zeros([len(y)])
-
-        a = 1 + (self.B * ((y - self.t1)**2))
-        b = np.exp(-(y - self.t0)/self.Tfall)
-        c = 1 + np.exp(-(y - self.t0)/self.Trise)
-        mu = (self.A * a * (b/c))
+    def _mean_fn(self, x, bands, images, zp, zpsys, A, B, t1, t0, Tfall, Trise):
+        a = 1 + (B * ((x - t1)**2))
+        b = jnp.exp(-(x - t0)/Tfall)
+        c = 1 + jnp.exp(-(x - t0)/Trise)
+        mu = (A * a * (b/c))
         return mu
+
 
 class Villar2019(BaseMeanFunction):
     """
     Villar (2019) mean function for Gaussian processes.
     """
-    def _unpack_params(self, params):
-        """
-        Args:
-            params (list): List containing parameters [A, beta, t1, t0, Tfall, Trise].
-                A (float): Amplitude parameter of the Villar function.
-                beta (float): Beta parameter of the Villar function.
-                t1 (float): t1 parameter of the Villar function.
-                t0 (float): t0 parameter of the Villar function.
-                Tfall (float): Fall timescale parameter of the Villar function.
-                Trise (float): Rise timescale parameter of the Villar function.
-        """
-        self.A = params[0]
-        self.beta = params[1]
-        self.t1 = params[2]
-        self.t0 = params[3]
-        self.Tfall = params[4]
-        self.Trise = params[5]
+    param_names = ['A', 'beta', 't1', 't0', 'Tfall', 'Trise']
         
-    def mean(self, y, params=None, bands=None, images=None, zp=None, zpsys=None):
-        """
-        Computes the mean value using the Villar (2019) mean function.
-
-        Args:
-            y (numpy.ndarray): Input data.
-            params (list, optional): List containing parameters [A, beta, t1, t0, Tfall, Trise] to reset mean function parameters.
-                Defaults to None.
-            bands: Not used in this function.
-
-        Returns:
-            numpy.ndarray: Mean value computed using the Villar (2019) mean function.
-        """
-        if params != None:
-            self._reset(params)
-        mu = np.zeros([len(y)])
-        denom = 1 + np.exp(-(y - self.t0)/self.Trise)
-        constant = self.A + (self.beta * (self.t1 - self.t0))
+    def _mean_fn(self, x, bands, images, zp, zpsys, A, beta, t1, t0, Tfall, Trise):
+        denom = 1 + jnp.exp(-(x - t0)/Trise)
+        constant = A + (beta * (t1 - t0))
     
-        for i in range(len(y)):
-            if y[i] < self.t1:
-                a = self.A + (self.beta * (y[i] - self.t0))
+        for i in range(len(x)):
+            if x[i] < t1:
+                a = A + (beta * (x[i] - t0))
                 mu[i] = a
             else:
-                b = np.exp(-(y[i] - self.t1)/self.Tfall)
+                b = jnp.exp(-(x[i] - t1)/Tfall)
                 mu[i] = (constant*b)
                 
         mu = (mu/denom)

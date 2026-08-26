@@ -196,6 +196,16 @@ class GP:
         y_rescaled = y/factor
         yerr_rescaled = yerr/factor
         return y_rescaled, yerr_rescaled
+
+    def _split_params(self, params):
+        kernel_params, meanfunc_params, lensing_params = None, None, None
+        if not fix_kernel_params:
+            kernel_params = params[self.kernel_params_start:self.kernel_params_end]
+        if not fix_mean_params:
+            mean_params = params[self.mean_params_start:self.mean_params_end]
+        if not fix_lensing_params:
+            lensing_params = params[self.lensing_params_start:self.lensing_params_end]
+        return kernel_params, meanfunc_params, lensing_params
     
     def _logprior(self, params):
         """
@@ -208,7 +218,7 @@ class GP:
         """
         return 0
     
-    def _loglikelihood(self, x, y, yerr, kernel_params, meanfunc_params, lensing_params):
+    def _loglikelihood(self, params, x, y, yerr):
         """
         Compute the log-likelihood of the data under a multivariate normal
         (Gaussian Process) model, including the lensing model's effect on
@@ -231,6 +241,8 @@ class GP:
         Returns:
             float: the log-likelihood of (y, yerr) given the model.
         """
+        kernel_params, meanfunc_params, lensing_params = self._split_params(params)
+
         shifted_x, transform_matrix = self.lensingmodel.lens(x, params=lensing_params)
 
         # Compute the mean vector for the given input data points x
@@ -260,7 +272,7 @@ class GP:
         
         return loglike
         
-    def jointprobability(self, params, logprior = None, fix_kernel_params = False, fix_mean_params = False, fix_lensing_params=False, invert=1):
+    def jointprobability(self, params, invert=1):
         """
         Compute the joint log-probability (log-likelihood + log-prior) of
         the kernel, mean function, and lensing-model parameters.
@@ -289,36 +301,9 @@ class GP:
 
         # Reject immediately if the point falls outside the prior support,
         # without paying the cost of evaluating the (potentially expensive) likelihood.
-        log_prior = logprior(params)
+        log_prior = self.logprior(params)
         if jnp.isinf(log_prior) or jnp.isnan(log_prior):
             return invert * -jnp.inf
-        
-        # Unpack the flat `params` vector into its constituent parameter
-        # groups (kernel/mean/lensing), based on which groups are free.
-        # Only free groups are present in `params`, in kernel -> mean ->
-        # lensing order, so the slicing below must match that ordering.
-        kernel_params = None
-        meanfunc_params = None
-        lensing_params = None
-        if not fix_lensing_params and not fix_mean_params and not fix_kernel_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-            meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
-            lensing_params = [params[i+len(self.kernel.params)+len(self.meanfunc.params)] for i in range(len(self.lensingmodel.params))]
-        elif not fix_mean_params and not fix_kernel_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-            meanfunc_params = [params[i+len(self.kernel.params)] for i in range(len(self.meanfunc.params))]
-        elif not fix_mean_params and not fix_lensing_params:
-            meanfunc_params = [params[i] for i in range(len(self.meanfunc.params))]
-            lensing_params = [params[i+len(self.meanfunc.params)] for i in range(len(self.lensingmodel.params))]
-        elif not fix_kernel_params and not fix_lensing_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-            lensing_params = [params[i+len(self.kernel.params)] for i in range(len(self.lensingmodel.params))]
-        elif not fix_kernel_params:
-            kernel_params = [params[i] for i in range(len(self.kernel.params))]
-        elif not fix_mean_params:
-            meanfunc_params = [params[i] for i in range(len(self.meanfunc.params))]
-        elif not fix_lensing_params:
-            lensing_params = [params[i] for i in range(len(self.lensingmodel.params))]
 
         # Evaluate the log-likelihood for the (possibly partially fixed)
         # parameter groups against the full dataset stored on self
@@ -327,7 +312,7 @@ class GP:
         # model's masking of the covariance matrix (see _loglikelihood),
         # not by looping over bands here - this is a single joint
         # evaluation across all bands/images at once.
-        loglike = self.loglikelihood(self.x, self.y, self.yerr, kernel_params, meanfunc_params, lensing_params)
+        loglike = self.loglikelihood(params, self.x, self.y, self.yerr)
         loglike += log_prior
         
         # Return the log likelihood or inverse log likelihood as either a float or jnp.inf (avoids Nans)
@@ -462,10 +447,16 @@ class GP:
         # based on which parameter groups are not fixed.
         self.ndim = 0
         if not fix_kernel_params:
+            self.kernel_params_start = self.ndim
+            self.kernel_params_end = self.kernel_params_start + len(self.kernel.params)
             self.ndim += len(self.kernel.params)
         if not fix_mean_params:
+            self.mean_params_start = self.ndim
+            self.mean_params_end = self.mean_params_start + len(self.meanfunc.params)
             self.ndim += len(self.meanfunc.params)
         if not fix_lensing_params:
+            self.lensing_params_start = self.ndim
+            self.lensing_params_end = self.lensing_params_start + len(self.lensingmodel.params)
             self.ndim += len(self.lensingmodel.params)
         
         # Use the default multivariate-normal log-likelihood (JIT-compiled
@@ -484,7 +475,7 @@ class GP:
             nlive = sampler_kwargs.pop('nlive', 500)
             sample = sampler_kwargs.pop('sample', 'rslice')
            
-            sampler = dynesty.NestedSampler(self.jointprobability, ptform, self.ndim, logl_args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params), nlive = nlive, sample = sample, **sampler_kwargs)
+            sampler = dynesty.NestedSampler(self.jointprobability, ptform, self.ndim, nlive = nlive, sample = sample, **sampler_kwargs)
             
             sampler.run_nested(**run_sampler_kwargs)
             return sampler
@@ -498,7 +489,7 @@ class GP:
                 raise ValueError("The length of the initial parameter positions does not match the length of the list with the initial parameter scatter. The init_scale parameter should either be a single number (e.g., init_scale = 1.) or a list with the scale values for each parameter being fit (e.g. init_scale = [1., 1., 1.] when fitting with three free parameters)")
 
             if method == 'minimize': 
-                results = minimize(self.jointprobability, init_pos, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, -1), **minimize_kwargs)
+                results = minimize(self.jointprobability, init_pos, args = (-1), **minimize_kwargs)
                 return results
 
             if np.isinf(np.any(self.logprior(init_pos))):
@@ -513,10 +504,10 @@ class GP:
                     p0[r] = np.random.normal(init_pos, 0.001)
             
             if method == 'emcee':
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1), **sampler_kwargs)
+                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, **sampler_kwargs)
 
             if method == 'zeus':
-                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, args=[self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, 1], **sampler_kwargs)
+                sampler = zeus.EnsembleSampler(nwalkers, self.ndim, self.jointprobability, **sampler_kwargs)
 
 
             # Run the sampler
