@@ -5,7 +5,7 @@ from dynesty import plotting as dyplot
 
 from gaussn import gausSN
 
-plt.style.use('/data/eeh55/Github/GausSN/ipynb/stylesheet/GausSN.mplstyle')
+plt.style.use('../ipynb/stylesheet/GausSN.mplstyle')
 
 # Array specifying the order of bands in increasing wavelength
 ordered = np.array(['UVF475W', 'UVF625W', 'UVF814W', 'B_CSP', 'V_CSP', 'lsstu', 'lsstg', 'ztfg', 'lsstr', 'ztfr', 'lssti', 'lsstz', 'roman::Z', 'lssty', 'roman::Y', 'roman::J', 'roman::H', 'F105W', 'F110W', 'F125W', 'F160W', 'EulerCAM', 'WFI'])
