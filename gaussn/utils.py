@@ -1,7 +1,11 @@
 import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from dynesty import plotting as dyplot
+
+try:
+    from dynesty import plotting as dyplot
+except ImportError:
+    pass
 
 from gaussn import gausSN
 
