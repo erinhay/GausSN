@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 import numpy as np
 import jax.numpy as jnp
 
-
 class BaseMeanFunction(ABC):
     """
     Parent kernel
@@ -97,7 +96,7 @@ class Sin(BaseMeanFunction):
         """
         if params != None:
             self._reset(params)
-        return self.A * np.sin((y*self.w) + self.phi)
+        return self.A * jnp.sin((y*self.w) + self.phi)
     
 class Gaussian(BaseMeanFunction):
     """
@@ -162,8 +161,8 @@ class ExpFunction(BaseMeanFunction):
         """
         if params != None:
             self._reset(params)
-        mu = np.zeros([len(y)])
-        mu = self.A * np.exp(y*self.tau)
+        mu = jnp.zeros([len(y)])
+        mu = self.A * jnp.exp(y*self.tau)
         return mu
 
 class Bazin2009(BaseMeanFunction):
@@ -201,10 +200,10 @@ class Bazin2009(BaseMeanFunction):
         """
         if params != None:
             self._reset(params)
-        mu = np.zeros([len(y)])
+        mu = jnp.zeros([len(y)])
 
-        a = np.exp(-(y - self.t0)/self.Tfall)
-        b = 1 + np.exp((y - self.t0)/self.Trise)
+        a = jnp.exp(-(y - self.t0)/self.Tfall)
+        b = 1 + jnp.exp((y - self.t0)/self.Trise)
         mu = self.A * (a/b) + self.beta
         return mu
 
@@ -224,8 +223,8 @@ class Karpenka2012(BaseMeanFunction):
                 Trise (float): Rise timescale parameter of the Karpenka function.
                 offset (float): Offset parameter of the Karpenka function.
         """
-        self.A = np.exp(params[0])
-        self.B = np.exp(params[1])
+        self.A = jnp.exp(params[0])
+        self.B = jnp.exp(params[1])
         self.t1 = params[2]
         self.t0 = params[3]
         self.Tfall = params[4]
@@ -246,11 +245,11 @@ class Karpenka2012(BaseMeanFunction):
         """
         if params != None:
             self._reset(params)
-        mu = np.zeros([len(y)])
+        mu = jnp.zeros([len(y)])
 
         a = 1 + (self.B * ((y - self.t1)**2))
-        b = np.exp(-(y - self.t0)/self.Tfall)
-        c = 1 + np.exp(-(y - self.t0)/self.Trise)
+        b = jnp.exp(-(y - self.t0)/self.Tfall)
+        c = 1 + jnp.exp(-(y - self.t0)/self.Trise)
         mu = (self.A * a * (b/c))
         return mu
 
@@ -291,19 +290,13 @@ class Villar2019(BaseMeanFunction):
         """
         if params != None:
             self._reset(params)
-        mu = np.zeros([len(y)])
-        denom = 1 + np.exp(-(y - self.t0)/self.Trise)
+        mu = jnp.zeros([len(y)])
+        denom = 1 + jnp.exp(-(y - self.t0)/self.Trise)
         constant = self.A + (self.beta * (self.t1 - self.t0))
-    
-        for i in range(len(y)):
-            if y[i] < self.t1:
-                a = self.A + (self.beta * (y[i] - self.t0))
-                mu[i] = a
-            else:
-                b = np.exp(-(y[i] - self.t1)/self.Tfall)
-                mu[i] = (constant*b)
-                
-        mu = (mu/denom)
+
+        a = self.A + (self.beta * (y - self.t0))
+        b = jnp.exp(-(y - self.t1)/self.Tfall)
+        mu = jnp.where(y<self.t1, a, constant*b) / denom
         return mu
 
 
@@ -343,7 +336,7 @@ class sncosmoMean:
             pass
         self.model.update(params_dict)
 
-    def mean(self, x, params=None, bands=None, images=None, zp=27.5, zpsys='ab'):
+    def mean(self, y, params=None, bands=None, images=None, zp=27.5, zpsys='ab'):
         """
         Computes the mean flux using the sncosmo model.
 
@@ -359,27 +352,27 @@ class sncosmoMean:
         if params != None:
             self._reset(params)
 
-        args = np.argsort(x)
+        args = np.argsort(y)
         revert_args = np.zeros(len(args), dtype=int)
         revert_args[args] = np.arange(len(args))
 
-        reordered_x = x[args]
-        if len(bands) >= 2:
+        reordered_y = y[args]
+        if not isinstance(bands, str):
             reordered_bands = bands[args]
         else:
             reordered_bands = bands
 
-        if len(zp) >= 2:
+        if not isinstance(zp, float):
             reordered_zp = zp[args]
         else:
             reordered_zp = zp
 
-        if len(zpsys) >= 2:
+        if not isinstance(zpsys, str):
             reordered_zpsys = zpsys[args]
         else:
             reordered_zpsys = zpsys
 
-        flux = self.model.bandflux(reordered_bands, reordered_x, zp=reordered_zp, zpsys=reordered_zpsys)
+        flux = self.model.bandflux(reordered_bands, reordered_y, zp=reordered_zp, zpsys=reordered_zpsys)
 
         return flux[revert_args]
 

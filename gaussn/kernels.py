@@ -102,7 +102,7 @@ class ExponentialKernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
 
         vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
@@ -130,7 +130,7 @@ class ConstantKernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
 
         K = jnp.ones([len(x), len(x_prime)]) * self.c
@@ -159,7 +159,7 @@ class DotProductKernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
 
         K = jnp.dot(x[:, None], x_prime[None, :])
@@ -190,7 +190,7 @@ class Matern32Kernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
         
         r2 = (x[:, None] - x_prime[None, :])**2
@@ -222,7 +222,7 @@ class Matern52Kernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
         
         r2 = (x[:, None] - x_prime[None, :])**2
@@ -237,7 +237,7 @@ class RationalQuadraticKernel(BaseKernel):
     """
     def _unpack_params(self, params):
         self.A = params[0]
-        self.l = params[1]
+        self.tau = params[1]
         self.scale_mixture = params[2]
         
     def _covariance(self, x, x_prime=None, params=None):
@@ -257,10 +257,10 @@ class RationalQuadraticKernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
 
-        K = self.A**2 * (1 + (x[:, None] - x_prime[None, :])**2/(2*self.scale_mixture*self.tau**2))
+        K = self.A**2 * (1 + (x[:, None] - x_prime[None, :])**2/(2*self.scale_mixture*self.tau**2))**(-self.scale_mixture)
         return K
     
 class GibbsKernel(BaseKernel):
@@ -306,7 +306,7 @@ class GibbsKernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
 
         normal_x = jnp.exp(-(x[:, None] - self.mu)**2 / (2*(self.sigma**2))) / (self.sigma * jnp.sqrt(2*jnp.pi))
@@ -349,7 +349,7 @@ class OUKernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
 
         r2 = (x[:, None] - x_prime[None, :])**2
@@ -366,7 +366,7 @@ class PeriodicKernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
 
         vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
@@ -389,7 +389,7 @@ class JJKernel(BaseKernel):
         if params != None:
             self._reset(params)
 
-        if x_prime == None:
+        if x_prime is None:
             x_prime = x
 
         vector_mag = jnp.sqrt((x[:, None] - x_prime[None, :])**2)
