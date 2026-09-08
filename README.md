@@ -10,6 +10,6 @@ and if you find the Glimpse code helpful to your work, please cite:
 
 > Hayes E.E., et al., 2026, [MNRAS](https://ui.adsabs.harvard.edu/abs/2026MNRAS.546ag113H/abstract), [546, 3](https://doi.org/10.1093/mnras/stag113).
 
-For an introduction to how to use GausSN / Glimpse, see the ``getting_started.ipynb'' notebook in the ipynb folder!
+For an introduction to how to use GausSN / Glimpse, see the ``getting_started.ipynb`` notebook in the ipynb folder!
 
 Thanks to Vidhi Lalchand (@vr308), Ben Boyd (@benboyd97), and Sam Ward (@sam-m-ward) for helpful discussion and Christian Kirkham (@astrochristian) for testing the code.
