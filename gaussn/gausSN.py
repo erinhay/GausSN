@@ -469,7 +469,7 @@ class GP:
                 results = minimize(self.jointprobability, init_pos, args = (self.logprior, fix_kernel_params, fix_mean_params, fix_lensing_params, -1), **minimize_kwargs)
                 return results
 
-            if np.isinf(np.any(self.logprior(init_pos))):
+            if np.any(np.isinf(self.logprior(init_pos))):
                 raise Exception("When passed to the specified ``log_prior'' function, some or all of the parameters that the kernel and mean function were initialized with yield an indefinite value. Please check that the initial parameters used are within the bounds of the prior, as the MCMC chains are initialized, with some scatter, around these values.")
 
             if p0 is None:
