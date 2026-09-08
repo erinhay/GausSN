@@ -357,17 +357,17 @@ class sncosmoMean:
         revert_args[args] = np.arange(len(args))
 
         reordered_y = y[args]
-        if len(bands) >= 2:
+        if not isinstance(bands, str):
             reordered_bands = bands[args]
         else:
             reordered_bands = bands
 
-        if len(zp) >= 2:
+        if not isinstance(zp, float):
             reordered_zp = zp[args]
         else:
             reordered_zp = zp
 
-        if len(zpsys) >= 2:
+        if not isinstance(zpsys, str):
             reordered_zpsys = zpsys[args]
         else:
             reordered_zpsys = zpsys
